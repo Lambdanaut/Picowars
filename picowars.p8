@@ -520,7 +520,8 @@ function make_selector(p)
             sprite = curve_n_e
             flip_horizontal = true
           elseif last_p_direction == 1 then
-            sprite = curve_n_w
+            sprite = curve_n_e
+            flip_y = true
             flip_horizontal = false
           end
         elseif next_p_direction == 3 then
