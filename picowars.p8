@@ -23,6 +23,7 @@ sfx_train_unit = 1
 sfx_select_unit = 2
 sfx_undefined_error = 3
 sfx_cant_move_there = 4
+sfx_cancel_movement = 5
 sfx_infantry_moveout = 14
 sfx_tank_moveout = 15
 sfx_recon_moveout = 16
@@ -198,7 +199,7 @@ function make_lvl_manager()
       return
     end 
     self.ui_do_for.callback_fn = function(l)
-      l:draw_msg(self.message_pos, msg, palette)
+      draw_msg(self.message_pos, msg, palette)
     end 
     if duration then
       self.ui_do_for.duration = duration
@@ -206,79 +207,6 @@ function make_lvl_manager()
       self.ui_do_for.duration = 5
     end
     self.ui_do_for:start()
-  end
-
-  lvl_manager.draw_msg = function(self, center_pos, msg, palette)
-    msg_length = #msg
-
-    local bar_length = bar_length
-    if bar_length then
-      -- bar_length should be between 0.0 and 1.0
-      local bar_length = max(0.0, bar_length or 1.0)
-    end
-    local padding = 2
-    local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
-    local y_pos = center_pos[2]
-    local bg_color = 6
-
-    -- grey is default 
-    if (palette) then
-      if palette == palette_orange then
-        bg_color = 9
-      elseif palette == palette_green then
-        bg_color = 3  -- dark green
-      elseif palette == palette_blue then
-        bg_color = 12
-      elseif palette == palette_pink then
-        bg_color = 14
-      end
-    end
-
-    -- draw message background rectangle
-    rectfill(
-      x_pos - padding,
-      y_pos - padding,
-      x_pos + msg_length * 4 ,
-      y_pos + 5,
-      bg_color)
-
-    -- draw message
-    print(msg, x_pos, y_pos - 1, 0)
-
-    -- draw bar
-    if (bar_length) then
-      local bar_bg_color = 0
-      local bar_fill_color = 8
-
-      -- bar background
-      line(
-        x_pos - padding,
-        y_pos + 5,
-        x_pos + msg_length * 4,
-        y_pos + 5,
-        bar_bg_color
-      )
-      -- bar fill
-      if(bar_length > 0.0) then
-        -- green
-        local bar_fill_color = 11
-        if (bar_length < 0.25) then
-          -- red
-          bar_fill_color = 8
-        elseif (bar_length < 0.6) then
-          -- yellow
-          bar_fill_color = 10
-        end
-
-        line(
-          x_pos - padding,
-          y_pos + 5,
-          x_pos - padding + (((msg_length * 4) + padding) * bar_length),
-          y_pos + 5,
-          bar_fill_color
-        )
-      end
-    end
   end
 
   lvl_manager:init_level()
@@ -364,9 +292,9 @@ function make_selector(p)
 
     if self.selecting then
 
-      if self.selection_type == 0 then
-        -- do unit selection
-        if btnp(4) then 
+      if btnp(4) then 
+        if self.selection_type == 0 then
+          -- do unit selection
           local unit_at_pos = get_unit_at_pos(self.p)
           if unit_at_pos and unit_at_pos.id ~= self.selection.id then
             -- couldn't move to position. blocked by unit
@@ -378,22 +306,19 @@ function make_selector(p)
             self.selection_type = 1  -- change selection type to unit movement
             return
           end
+        elseif self.selection_type == 2 then
+          -- self:stop_selecting()
         end
-      end
-
-      if btnp(5) then 
+      elseif btnp(5) then 
         -- stop selecting
 
         if self.selection_type == 1 or self.selection_type == 2 then
-          -- return unit if he's moved
+          -- return unit to start location if he's moved
+          sfx(sfx_cancel_movement)
           self.selection:unmove()
         end
 
-        self.selecting = false
-        self.selection = nil
-        self.selection_type = nil
-        self.movable_tiles = {}
-        self.arrowed_tiles = {}
+        self:stop_selecting()
 
         return
       end
@@ -423,6 +348,8 @@ function make_selector(p)
         -- draw movement arrow
         self:draw_movement_arrow()
 
+      elseif self.selection_type == 2 then
+        draw_msg({self.p[1], self.p[2] - 15} , "attack")
       end
     end
 
@@ -434,6 +361,14 @@ function make_selector(p)
     spr(2, self.p[1] + offset, self.p[2] + offset)
   end
 
+  selector.stop_selecting = function(self)
+    self.selecting = false
+    self.selection = nil
+    self.selection_type = nil
+    self.movable_tiles = {}
+    self.arrowed_tiles = {}
+  end 
+
   selector.move = function(self)
     self.time_since_last_move += delta_time
 
@@ -442,7 +377,7 @@ function make_selector(p)
 
     -- move to the position based on input
     -- don't move if we're in any prompt selection_type
-    if self.time_since_last_move > self.move_cooldown and self.selection_type ~= 1 then
+    if self.time_since_last_move > self.move_cooldown and (not self.selecting or self.selection_type == 0) then
       if change[1] and change[2] then
         -- if both inputs are down, perform move twice, once for x, once for y
         local move_result = self:move_to(change[1], 0)
@@ -1096,27 +1031,6 @@ function make_do_for(parent, duration, callback_fn, expired_fn)
   return do_for
 end
 
--- linear interpolation functions
-function lerp(a, b, t)
-  -- does a linear interpolation between two points
-  return a + (b - a) * t
-end
-
-function bounce(a, b, t)
-  -- does a bounce interpolation between two points
-  local x
-  if t <= 1/2.75 then
-    x = 7.5625 * t * t
-  elseif t <= 2/2.75 then
-    x = 7.5625 * (t - 1.5/2.75)^2 + .75
-  elseif t <= 2.25/2.75 then
-    x = 7.5625 * (t - 2.25/2.75)^2 + .9375
-  elseif t <= 1 then
-    x = 7.5625 * (t - 2.625/2.75)^2 + .984375
-  end
-  return lerp(a, b, x)
-end
-
 -- palette functions
 function set_palette(palette)
   if palette == palette_orange then
@@ -1194,6 +1108,39 @@ function zspr(sprite, w, h, dx, dy, dz, flip_sprite)
   local sw = 8 * w
   local sh = 8 * h
   sspr(8 * (sprite % 16), 8 * flr(sprite / 16), sw, sh, dx, dy, sw * dz - magic_fucking_number, sh * dz - magic_fucking_number, flip_sprite)
+end
+
+draw_msg = function(center_pos, msg, palette)
+  msg_length = #msg
+
+  local padding = 2
+  local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
+  local y_pos = center_pos[2]
+  local bg_color = 6
+
+  -- grey is default 
+  if (palette) then
+    if palette == palette_orange then
+      bg_color = 9
+    elseif palette == palette_green then
+      bg_color = 3  -- dark green
+    elseif palette == palette_blue then
+      bg_color = 12
+    elseif palette == palette_pink then
+      bg_color = 14
+    end
+  end
+
+  -- draw message background rectangle
+  rectfill(
+    x_pos - padding,
+    y_pos - padding,
+    x_pos + msg_length * 4 ,
+    y_pos + 5,
+    bg_color)
+
+  -- draw message
+  print(msg, x_pos, y_pos - 1, 0)
 end
 
 
@@ -1413,7 +1360,7 @@ __sfx__
 00010000313303b33033330033300433005330073300933009330093300a330083300633003330023200032000320003200131000300003000030000300003000430004300013000030000300003000030000300
 000200002e23020230082400724007230082500926005260052500623000220002200022000220002200022000220002200022000220002200021000210002100021000200002000020000200002000020000200
 000300002415023150231502315025150271502714026140221401b1401414023100231002310025100271002710026100221001b100141000010000100001000010000100001000010000100001000010000100
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00020000015500f5501855027550345503e550315000e500035000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
