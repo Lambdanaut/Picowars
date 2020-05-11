@@ -309,7 +309,7 @@ function make_selector(p)
 
   selector.update = function(self)
 
-    if btnp(4) then 
+    if btnp(4) and not self.selecting then 
       -- start selecting
       self.selecting = true
 
@@ -472,18 +472,32 @@ function make_unit(p, sprite, team)
 
   unit.get_movable_tiles = function(self)
     local current_tile = nil
+    local last_tile = nil
     local tiles_to_explore = {{self.p, self.travel}}  -- store the point, and the travel left
-    local explored_tiles = {}
+    local movable_tiles = {}
+    local iterations = 0
 
     while #tiles_to_explore > 0 do
+      iterations += 1
       -- pop the last entry off the tiles_to_explore table and set it as the current tile
+      last_tile = current_tile
       current_tile = table_pop(tiles_to_explore)
 
-      -- add current tile to explored tiles
-      explored_tiles[#explored_tiles + 1] = current_tile[1]
       if current_tile[2] > 0 then
         -- if we have any travel left in this tile then explore its neighbors
         local current_t = current_tile[1] -- helper to get the current tile(without travel)
+
+        -- if we haven't already added this tile to be returned, add it to be returned
+        local has_added_to_movable_tiles = false
+        for _, t2 in pairs(movable_tiles) do
+
+          has_added_to_movable_tiles = points_equal(current_t, t2)
+          if has_added_to_movable_tiles then break end
+        end
+        if not has_added_to_movable_tiles then
+          movable_tiles[#movable_tiles + 1] = current_t
+        end
+
         -- add all neighboring tiles to the explore list, while reducing their travel leftover
         for _, t in pairs({
           {current_t[1], current_t[2] - 8},  -- north
@@ -492,28 +506,32 @@ function make_unit(p, sprite, team)
            {current_t[1] - 8, current_t[2]}   -- west
            }) do
 
-          -- determine if we've already explored this point
-          local has_explored = false
-          for _, t2 in pairs(explored_tiles) do
-            has_explored = points_equal(t, t2)
-            if has_explored then break end
+          -- todo: determine t's tile type and take off more travel time for certain terrains
+          local travel_reduction = 1
+          local travel_left = current_tile[2] - travel_reduction
+
+          local to_explore = false
+          for _, t2 in pairs(tiles_to_explore) do
+
+            to_explore = points_equal(t, t2[1]) and t2[2] > travel_left
+            if to_explore then break end
           end
 
-          if not has_explored then
-            -- if we haven't explored this point already, add it to the to-explore list
+          if not to_explore and (not last_tile or not points_equal(current_t, last_tile[1])) then
 
-            -- todo: determine t's tile type and take off more travel time for certain terrains
-            local travel_reduction = 1
-            local travel_left = current_tile[2] - travel_reduction
-
-            tiles_to_explore[#tiles_to_explore + 1] = {t, travel_left}
+            if not has_explored then
+              tiles_to_explore[#tiles_to_explore + 1] = {t, travel_left}
+            end
           end
         end
       end
 
     end
 
-    return explored_tiles
+    printh(iterations)
+    printh(#movable_tiles)
+
+    return movable_tiles
 
   end
 
@@ -527,7 +545,7 @@ function make_infantry(p, team)
     team
     )
 
-  infantry.travel = 4
+  infantry.travel = 8
   infantry.damage = 1
 
   return infantry
