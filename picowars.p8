@@ -125,6 +125,7 @@ end
 
 function draw_splash_screen()
   rectfill(0, 0, 128, 128, 15)
+  print("pico wars", 49, 60, 0)
 end
 
 function tile_pos_to_rect(tile_coord)
@@ -156,6 +157,30 @@ function get_unit_at_pos(p)
       return unit
     end
   end
+end
+
+function get_selection(p)
+    -- returns a two part table where 
+    -- the first index is a flag indicating the selection 
+      -- 0: unit
+      -- 1: factory
+      -- 2: tile
+    -- the second index is the selection.
+
+  local unit = get_unit_at_pos(p)
+  if unit then
+    -- selection is unit
+    return {0, unit}
+  end
+
+  local tile = mget(tile_to_pixel_pos(p))
+
+  if fget(tile, flag_structure) and fget(tile, flag_factory) then
+    -- selection is factory
+    return {1, tile}
+  end
+  -- selection is tile
+  return {2, tile}
 end
 
 -- level manager code
@@ -259,6 +284,13 @@ function make_selector(p)
   -- tiles that a movement arrow has passed through, in order from first to last
   selector.arrowed_tiles = {}
 
+  -- during a prompt, prompt_options will be populated with options
+  -- for unit prompt:
+  -- 0 = rest
+  -- 1 = attack
+  -- 2 = capture
+  selector.prompt_selected = 1
+  selector.prompt_options = {}
 
   -- components
   selector.animator = make_animator(
@@ -273,7 +305,7 @@ function make_selector(p)
       -- start selecting
       self.selecting = true
 
-      local selection = current_map:get_selection(self.p)
+      local selection = get_selection(self.p)
       self.selection = selection[2]
 
       if selection[1] == 0 then
@@ -307,9 +339,11 @@ function make_selector(p)
             return
           end
         elseif self.selection_type == 2 then
+          -- do unit selection prompt
+
           -- self:stop_selecting()
         end
-      elseif btnp(5) then 
+      elseif btnp(5) then
         -- stop selecting
 
         if self.selection_type == 1 or self.selection_type == 2 then
@@ -349,6 +383,8 @@ function make_selector(p)
         self:draw_movement_arrow()
 
       elseif self.selection_type == 2 then
+        draw_msg({self.p[1], self.p[2] - 35} , "capture")
+        draw_msg({self.p[1], self.p[2] - 25} , "rest")
         draw_msg({self.p[1], self.p[2] - 15} , "attack")
       end
     end
@@ -368,6 +404,19 @@ function make_selector(p)
     self.movable_tiles = {}
     self.arrowed_tiles = {}
   end 
+
+  selector.start_unit_prompt = function(self)
+    self.selection_type = 2
+
+    self.prompt_options = {0}  -- rest is in options by default
+
+    local targets = self.selection:targets()
+    if #targets > 0 then 
+      add(self.prompt_options, 1)
+    end
+
+    -- todo: add ability for capturing structures here
+  end
 
   selector.move = function(self)
     self.time_since_last_move += delta_time
@@ -593,44 +642,16 @@ function make_war_map(r)
     -- reset_palette()
   end
 
-  war_map.get_selection = function(self, p)
-    -- returns a two part table where 
-    -- the first index is a flag indicating the selection 
-      -- 0: unit
-      -- 1: factory
-      -- 2: tile
-    -- the second index is the selection.
-
-    local unit = get_unit_at_pos(p)
-    if unit then
-      -- selection is unit
-      return {0, unit}
-    end
-
-    local tile = mget(tile_to_pixel_pos(p))
-
-    if fget(tile, flag_structure) and fget(tile, flag_factory) then
-      -- selection is factory
-      return {1, tile}
-    end
-
-    -- selection is tile
-    return {2, tile}
-
-  end
-
   return war_map
-
 end
-
 
 function make_units()
   units = {}
 
-  units[1] = make_infantry({24, 32}, palette_pink)
-  units[2] = make_mech({32, 32}, palette_pink)
-  units[3] = make_recon({64, 32}, palette_pink)
-  units[4] = make_tank({64, 48}, palette_pink)
+  units[1] = make_infantry({24, 32})
+  units[2] = make_mech({32, 32})
+  units[3] = make_recon({64, 32})
+  units[4] = make_tank({64, 48})
 end
 
 function make_unit(p, sprite, team)
@@ -706,12 +727,7 @@ function make_unit(p, sprite, team)
         end
 
         -- add all neighboring tiles to the explore list, while reducing their travel leftover
-        for t in all({
-          {current_t[1], current_t[2] - 8},  -- north
-           {current_t[1], current_t[2] + 8},  -- south
-           {current_t[1] + 8, current_t[2]},  -- east
-           {current_t[1] - 8, current_t[2]}   -- west
-           }) do
+        for t in all(get_tile_adjacents(current_t)) do
 
           -- check the travel reduction for a the tile's type
           local travel_reduction = self:tile_mobility(mget(t[1] / 8, t[2] / 8))
@@ -787,7 +803,7 @@ function make_unit(p, sprite, team)
 
     else
       -- no more points left. stop moving
-      selector.selection_type = 2  -- change to select type unit prompt
+      selector:start_unit_prompt()  -- change to select type unit prompt
       self:cleanup_move()
     end
 
@@ -805,7 +821,6 @@ function make_unit(p, sprite, team)
       self.movement_i = 1
       self.movement_points = {}
     end
-
 
   end
 
@@ -830,6 +845,14 @@ function make_unit(p, sprite, team)
     return 255 -- unwalkable if all other options are exhausted
   end
 
+  unit.targets = function(self)
+    local targets = {}
+    for t in all(get_tile_adjacents(self.p)) do
+      local u = get_unit_at_pos(t)
+      if u and u.team != self.team then add(targets, u) end
+    end
+    return targets
+  end
 
   return unit
 end
@@ -1139,10 +1162,29 @@ draw_msg = function(center_pos, msg, palette)
     y_pos + 5,
     bg_color)
 
+  line(
+    x_pos - padding,
+    y_pos + 5,
+    x_pos + msg_length * 4,
+    y_pos + 5,
+    2)
+  -- line(
+  --   x_pos - padding,
+  --   y_pos - 5,
+  --   x_pos + msg_length * 4,
+  --   y_pos - 5,
+  --   2 )
+
   -- draw message
   print(msg, x_pos, y_pos - 1, 0)
 end
 
+function get_tile_adjacents(p)
+    return {{p[1], p[2] - 8},  -- north
+     {p[1], p[2] + 8},  -- south
+     {p[1] + 8, p[2]},  -- east
+     {p[1] - 8, p[2]}}   -- west
+end
 
 
 __gfx__
