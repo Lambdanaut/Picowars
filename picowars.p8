@@ -4,6 +4,8 @@ __lua__
 
 version = "0.1"
 
+debug = false
+
 -- constants
 map_size_x = 16
 map_size_y = 16
@@ -31,7 +33,7 @@ flag_river = 2
 flag_forest = 3
 flag_mountain = 4
 flag_ocean = 5
-flag_field = 6
+flag_plain = 6
 
 flag_structure = 1  -- required for structure
 flag_city = 2
@@ -39,6 +41,12 @@ flag_capital = 3
 flag_factory = 4
 
 flag_unit = 2
+
+-- mobility ids
+mobility_infantry = 0
+mobility_mech = 1
+mobility_tires = 2
+mobility_treads = 3
 
 -- map currently loaded
 current_map = nil
@@ -87,7 +95,7 @@ function _draw()
     lvl_manager:draw()
     current_map:draw()
 
-    for _, unit in pairs(units) do
+    for unit in all(units) do
       unit:draw()
     end
 
@@ -299,6 +307,9 @@ function make_selector(p)
   -- movable tiles for selected unit
   selector.movable_tiles = {}
 
+  -- tiles that a movement arrow has passed through, in order from first to last
+  selector.arrowed_tiles = {}
+
 
   -- components
   selector.animator = make_animator(
@@ -321,45 +332,25 @@ function make_selector(p)
         sfx(sfx_select_unit)
         self.movable_tiles = self.selection:get_movable_tiles()
         self.selection_type = 0
+        self.arrowed_tiles = {self.selection.p}
       end
     end
 
     if self.selecting then
-      -- do selecting
-
       if btnp(5) then 
         -- stop selecting
         self.selecting = false
         self.selection = nil
         self.selection_type = nil
         self.movable_tiles = {}
-
+        self.arrowed_tiles = {}
         return
       end
 
     end
 
     -- do selector movement
-    self.time_since_last_move += delta_time
-    x_change = 0
-    y_change = 0
-    if btn(0) then x_change = -8 end
-    if btn(1) then x_change = 8 end
-    if btn(2) then y_change = -8 end
-    if btn(3) then y_change = 8 end
-
-    local new_x = self.p[1] + x_change
-    local new_y = self.p[2] + y_change
-
-    local in_bounds = point_in_rect({new_x, new_y}, current_map.r)
-
-    if in_bounds and (x_change ~= 0 or y_change ~= 0) and self.time_since_last_move > self.move_cooldown then
-      self.p[1] += x_change
-      self.p[2] += y_change
-
-      self.time_since_last_move = 0
-      sfx(sfx_selector_move)
-    end
+    self:move()
   end
 
   selector.draw = function(self)
@@ -368,9 +359,19 @@ function make_selector(p)
       -- draw selection ui
       if self.selection_type == 0 then
         -- select unit
-        for _, t in pairs(self.movable_tiles) do
-          rectfill( t[1], t[2], t[1] + 8, t[2] + 8, 4)
+        for i, t in pairs(self.movable_tiles) do
+          if debug then
+            rectfill(t[1], t[2], t[1] + 7, t[2] + 7, (i % 15) + 1)
+            print(tostring(i), t[1], t[2], 0)
+          else
+            local flip = last_checked_time * 2 % 2 > 1
+            spr(3, t[1], t[2], 1, 1, flip, flip)
+          end
         end
+
+        -- draw movement arrow
+        self:draw_movement_arrow()
+
       end
     end
 
@@ -380,6 +381,84 @@ function make_selector(p)
     -- draw pointer bounce offset by animator
     local offset = 8 - self.animator.animation_frame * 3
     spr(2, self.p[1] + offset, self.p[2] + offset)
+  end
+
+  selector.move = function(self)
+    self.time_since_last_move += delta_time
+
+    -- get x and y change as a vector from controls input
+    local change = self:get_move_input()
+
+    -- move to the position based on input
+    if self.time_since_last_move > self.move_cooldown then
+      if change[1] and change[2] then
+        -- if both inputs are down, perform move twice, once for x, once for y
+        local move_result = self:move_to(change[1], 0)
+        if move_result then
+          self:move_to(0, change[2])
+        end
+      elseif change[1] then
+        -- move x
+        self:move_to(change[1], 0)
+      elseif change[2] then
+        -- move y
+        self:move_to(0, change[2])
+      end
+    end
+
+  end
+
+  selector.get_move_input = function(self)
+    x_change = nil
+    y_change = nil
+    if btn(0) then x_change = -8 end
+    if btn(1) then x_change = 8 end
+    if btn(2) then y_change = -8 end
+    if btn(3) then y_change = 8 end
+    return {x_change, y_change}
+  end
+
+  selector.move_to = function(self, change_x, change_y)
+    -- moves the selector to a specific location
+    -- returns true on successful cursor movement
+
+    local new_p = {self.p[1] + change_x, self.p[2] + change_y}
+    local in_bounds = point_in_rect(new_p, current_map.r)
+
+    if self.selecting and self.selection_type == 0 then
+      -- if we're selecting a unit, keep selector bounded by unit's mobility
+      in_bounds = in_bounds and point_in_table(new_p, self.movable_tiles)
+    end
+
+    if in_bounds then
+      self.p = new_p
+
+      if self.selecting and self.selection_type == 0 then
+        -- if we crossover our arrow, delete all points in the arrow after the crossover
+        local point_i = point_in_table(new_p, self.arrowed_tiles)
+        if point_i then
+          local new_arrowed_tiles = {}
+          for i = 1, point_i do
+            new_arrowed_tiles[i] = self.arrowed_tiles[i]
+          end
+          self.arrowed_tiles = new_arrowed_tiles
+        end
+
+        -- add tile to the arrowed tiles list
+        add(self.arrowed_tiles, new_p)
+
+      end
+
+      self.time_since_last_move = 0
+      sfx(sfx_selector_move)
+      return true
+    end
+  end
+
+  selector.draw_movement_arrow = function(self)
+    for p in all(self.arrowed_tiles) do
+      rectfill(p[1], p[2], p[1] + 7, p[2] + 7, 0)
+    end
   end
 
 end
@@ -424,7 +503,7 @@ function make_war_map(r)
       -- 2: tile
     -- the second index is the selection.
 
-    for _, unit in pairs(units) do
+    for unit in all(units) do
       if points_equal(p, unit.p) then
         -- selection is unit
         return {0, unit}
@@ -472,16 +551,14 @@ function make_unit(p, sprite, team)
 
   unit.get_movable_tiles = function(self)
     local current_tile = nil
-    local last_tile = nil
-    local tiles_to_explore = {{self.p, self.travel}}  -- store the point, and the travel left
+    local tiles_to_explore = {{self.p, self.travel}}  -- store the {point, travel leftover, steps_moved_so_far}
     local movable_tiles = {}
-    local iterations = 0
+    local explore_i = 0  -- index in tiles_to_explore of what we've explored so far
 
-    while #tiles_to_explore > 0 do
-      iterations += 1
+    while #tiles_to_explore > explore_i do
       -- pop the last entry off the tiles_to_explore table and set it as the current tile
-      last_tile = current_tile
-      current_tile = table_pop(tiles_to_explore)
+      explore_i += 1
+      current_tile = tiles_to_explore[explore_i]
 
       if current_tile[2] > 0 then
         -- if we have any travel left in this tile then explore its neighbors
@@ -489,51 +566,70 @@ function make_unit(p, sprite, team)
 
         -- if we haven't already added this tile to be returned, add it to be returned
         local has_added_to_movable_tiles = false
-        for _, t2 in pairs(movable_tiles) do
+        for t2 in all(movable_tiles) do
 
           has_added_to_movable_tiles = points_equal(current_t, t2)
           if has_added_to_movable_tiles then break end
         end
         if not has_added_to_movable_tiles then
-          movable_tiles[#movable_tiles + 1] = current_t
+          add(movable_tiles, current_t)
         end
 
         -- add all neighboring tiles to the explore list, while reducing their travel leftover
-        for _, t in pairs({
+        for t in all({
           {current_t[1], current_t[2] - 8},  -- north
            {current_t[1], current_t[2] + 8},  -- south
            {current_t[1] + 8, current_t[2]},  -- east
            {current_t[1] - 8, current_t[2]}   -- west
            }) do
 
-          -- todo: determine t's tile type and take off more travel time for certain terrains
-          local travel_reduction = 1
+          -- check the travel reduction for a the tile's type
+          local travel_reduction = self:tile_mobility(mget(t[1] / 8, t[2] / 8))
           local travel_left = current_tile[2] - travel_reduction
 
-          local to_explore = false
-          for _, t2 in pairs(tiles_to_explore) do
+          -- see if we've already checked this tile. if we have and the cost to get to it was lower, don't explore the new tile.
+          local checked = false
+          for t2 in all(tiles_to_explore) do
 
-            to_explore = points_equal(t, t2[1]) and t2[2] > travel_left
-            if to_explore then break end
+            checked = points_equal(t, t2[1]) and travel_left <= t2[2]
+            if checked then break end
           end
 
-          if not to_explore and (not last_tile or not points_equal(current_t, last_tile[1])) then
-
-            if not has_explored then
-              tiles_to_explore[#tiles_to_explore + 1] = {t, travel_left}
-            end
+          if not checked then
+            local new_tile = {t, travel_left}
+            add(tiles_to_explore, new_tile)
           end
         end
       end
 
     end
 
-    printh(iterations)
-    printh(#movable_tiles)
-
     return movable_tiles
 
   end
+
+  unit.tile_mobility = function(self, tile)
+    printh(tile)
+    -- returns the mobility cost for traversing a tile for the unit's mobility type
+    if fget(tile, flag_structure) then return 1 end
+    if fget(tile, flag_terrain) then
+      if fget(tile, flag_road) then return 1
+      elseif fget(tile, flag_plain) then
+        if self.mobility_type == mobility_tires then return 2
+        else return 1 end
+      elseif fget(tile, flag_forest) then
+        if self.mobility_type == mobility_tires then return 3
+        elseif self.mobility_type == mobility_treads then return 2
+        else return 1 end
+      elseif fget(tile, flag_mountain) or fget(tile, flag_river) then
+        if self.mobility_type == mobility_infantry then return 2
+        elseif self.mobility_type == mobility_mech then return 1
+        else return 255 end
+      end
+    end
+    return 255 -- unwalkable if all other options are exhausted
+  end
+
 
   return unit
 end
@@ -545,7 +641,8 @@ function make_infantry(p, team)
     team
     )
 
-  infantry.travel = 8
+  infantry.mobility_type = mobility_infantry
+  infantry.travel = 16
   infantry.damage = 1
 
   return infantry
@@ -740,16 +837,24 @@ function table_pop(t)
   return v
 end
 
+function point_in_table(p, t)
+  -- returns the index of the first point that matches if it is in the table
+  -- otherwise returns nil
+  for i, p2 in pairs(t) do
+    if points_equal(p, p2) then return i end
+  end
+end
+
 
 __gfx__
 7700007700000000777770000000000000000000000000000000000000000044000000002200000000000000000000000000000000000000566666555ccccc63
-7000000707700770755000000000000000000000000000000000000000000044000000002200000000000000000000000000000000000000c66666cc5c5c5c66
-00000000070000707567000000000000000000000000000000000000000000440000000022000000000000000000000000000000000000005667665c66666666
-00000000000000007056700000000000000000000000000000000000000000440000000022000000000000000000000000dddd0000000000c66766cc66666666
+7000000707700770755000000707070700000000000000000000000000000044000000002200000000000000000000000000000000000000c66666cc5c5c5c66
+00000000070000707567000000700070000000000000000000000000000000440000000022000000000000000000000000000000000000005667665c66666666
+00000000000000007056700007070707000000000000000000000000000000440000000022000000000000000000000000dddd0000000000c66766cc66666666
 0000000000000000700567000000000000000000000000000000000000000044000000002200000000000000000000000ddddd50000000005666665c66776677
-0000000007000070000056500000000000000000000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
-7000000707700770000005500000000000000000000000000000000000000444000000002220000000000000000000000d555550000000006667666666666666
-7700007700000000000000000000000000000000000000000000000044444443444444443244444400000000000000000067750000000000666766635c5c5c66
+0000000007000070000056500707070700000000000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
+7000000707700770000005500070007000000000000000000000000000000444000000002220000000000000000000000d555550000000006667666666666666
+7700007700000000000000000707070700000000000000000000000044444443444444443244444400000000000000000067750000000000666766635c5c5c66
 0888880008888800000000000000000000000000000000000000000055555553000000003555555500f0000000000000006dd500005555000000000033b33b33
 899999808999998000888000008880000000000000000000000000002222444500000000522222220f4400f0000000000655555000757500000000053bbb5bb3
 8999999889999998088278000882780000000000000000000000000022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
@@ -790,27 +895,27 @@ ffff1f00ffff1f778888880088888866000000000000000000000000000002440000000022200000
 ffff1f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc000000000000cc0000000000000000
 088fff70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000062000000000000cc0000000000000000
 02877777000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022000000000000464ccccc4400000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000033555555555555555555533300000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000035ccccccccccccccccccc63300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005cccccc666666666cccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccc63333333335ccccc6300000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccc63333333335ccccc635ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005cccccc555555555cccccc635ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc635ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc635ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005ccccccccccccccccccccc635ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006ccccccccccccccccccccc635ccccc63
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000036ccccccccccccccccccc6335ccccc63
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003366666666666666666663335ccccc63
+00000000000000000000000000000000000000000000000000000000000000000008884000000000000000000000000033555555555555555555533300000000
+00000000000000000000000000000000000000000000000000000000000000000008884000000000000000000000000035ccccccccccccccccccc63300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400000088888888888888000005ccccccccccccccccccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400000888888888888888800005ccccccccccccccccccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400008888888888888888840005ccccccccccccccccccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400008884444444444488840005ccccccccccccccccccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400008884000000000088840005cccccc666666666cccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400008884000000000088840005ccccc63333333335ccccc6300000000
+0000000000000000000000000000000000000000000000000000000000000000000888400008884000000000088840005ccccc63333333335ccccc635ccccc63
+0000000000000000000000000000000000000000000000000000000000000000000888400008884000000000088840005cccccc555555555cccccc635ccccc63
+0000000000000000000000000000000000000000000000000000000000000000000888400008888888888888888840005ccccccccccccccccccccc635ccccc63
+0000000000000000000000000000000000000000000000000000000000000000088888880008888888888888888840005ccccccccccccccccccccc635ccccc63
+0000000000000000000000000000000000000000000000000000000000000000048888840000888888888888888400005ccccccccccccccccccccc635ccccc63
+0000000000000000000000000000000000000000000000000000000000000000004888400000044444444444444000006ccccccccccccccccccccc635ccccc63
+00000000000000000000000000000000000000000000000000000000000000000004840000000000000000000000000036ccccccccccccccccccc6335ccccc63
+0000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000003366666666666666666663335ccccc63
 __gff__
-00000000000000212121000000004343000000000000002121210100060a1209000000000000002121211111030343000000000000000001010100410303434300000000000000000000000000000000000000000000000000000005050500000000000000000000000000000505050000000000000000000000000005050505
+00000000000000212121000000004343000000000000002121210100060a1209000000000000002121211111030343000000000000000001010100410303434300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000505050000000000000000000000000005050505
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
-0000000000080808080828000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000018080808080828000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00185e08073b3b3b3b3b29000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 18077f3b3b3b3b3b3b3b09280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 273b7f2c2d2d2d2d2d2e3b290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
