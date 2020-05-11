@@ -292,6 +292,9 @@ function make_selector(p)
   selector.prompt_selected = 1
   selector.prompt_options = {}
 
+  -- targets within attack range
+  selector.attack_targets = {}
+
   -- components
   selector.animator = make_animator(
     selector,
@@ -324,7 +327,20 @@ function make_selector(p)
 
     if self.selecting then
 
-      if btnp(4) then 
+      local arrow_val
+      if btnp(2) then arrow_val = 1 elseif btnp(3) then arrow_val = -1 end
+      if arrow_val then
+        if self.selection_type == 2 then
+          -- do unit selection prompt
+          self.prompt_selected = self.prompt_selected + arrow_val
+          if self.prompt_selected > #self.prompt_options then
+            self.prompt_selected = 1
+          elseif self.prompt_selected < 1 then
+            self.prompt_selected = #self.prompt_options
+         end
+        end
+
+      elseif btnp(4) then 
         if self.selection_type == 0 then
           -- do unit selection
           local unit_at_pos = get_unit_at_pos(self.p)
@@ -350,12 +366,14 @@ function make_selector(p)
           -- return unit to start location if he's moved
           sfx(sfx_cancel_movement)
           self.selection:unmove()
+          self.p = self.selection.p
         end
 
         self:stop_selecting()
 
         return
       end
+
 
     end
 
@@ -383,9 +401,19 @@ function make_selector(p)
         self:draw_movement_arrow()
 
       elseif self.selection_type == 2 then
-        draw_msg({self.p[1], self.p[2] - 35} , "capture")
-        draw_msg({self.p[1], self.p[2] - 25} , "rest")
-        draw_msg({self.p[1], self.p[2] - 15} , "attack")
+        -- draw rest/attack/capture unit prompt
+        local y_offset = 15
+        local prompt_text
+        for i, prompt in pairs(self.prompt_options) do
+          local palette = nil
+          if prompt == 0 then prompt_text = "rest"
+          elseif prompt == 1 then prompt_text = "attack"
+          else prompt_text = "capture" end
+          if i == self.prompt_selected then palette = palette_pink end
+
+          draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, palette)
+          y_offset += 9
+        end
       end
     end
 
@@ -409,9 +437,12 @@ function make_selector(p)
     self.selection_type = 2
 
     self.prompt_options = {0}  -- rest is in options by default
+    self.prompt_selected = 1
 
-    local targets = self.selection:targets()
-    if #targets > 0 then 
+    -- store the attack targets
+    self.attack_targets = self.selection:targets()
+    if #self.attack_targets > 0 then 
+      -- add attack to the prompt if we have targets
       add(self.prompt_options, 1)
     end
 
@@ -650,8 +681,8 @@ function make_units()
 
   units[1] = make_infantry({24, 32})
   units[2] = make_mech({32, 32})
-  units[3] = make_recon({64, 32})
-  units[4] = make_tank({64, 48})
+  units[3] = make_recon({64, 32}, palette_blue)
+  units[4] = make_tank({64, 48}, palette_blue)
 end
 
 function make_unit(p, sprite, team)
@@ -1168,12 +1199,6 @@ draw_msg = function(center_pos, msg, palette)
     x_pos + msg_length * 4,
     y_pos + 5,
     2)
-  -- line(
-  --   x_pos - padding,
-  --   y_pos - 5,
-  --   x_pos + msg_length * 4,
-  --   y_pos - 5,
-  --   2 )
 
   -- draw message
   print(msg, x_pos, y_pos - 1, 0)
