@@ -11,19 +11,21 @@ map_size_x = 16
 map_size_y = 16
 
 -- palettes
-palette_orange = 0
-palette_green = 1
-palette_blue = 2
-palette_pink = 3
-palette_black = 4
+-- numbers start after colors
+palette_orange = 16
+palette_green = 17
+palette_blue = 18
+palette_pink = 19
 
 -- sfx
 sfx_selector_move = 0
-sfx_train_unit = 1
+sfx_unit_rest = 1
 sfx_select_unit = 2
 sfx_undefined_error = 3
 sfx_cant_move_there = 4
 sfx_cancel_movement = 5
+sfx_prompt_change = 6
+sfx_end_turn = 7
 sfx_infantry_moveout = 14
 sfx_tank_moveout = 15
 sfx_recon_moveout = 16
@@ -71,7 +73,6 @@ function _init()
 
   make_war_maps()
   current_map = war_maps[1]
-  make_lvl_manager()
   make_selector({0, 0})
   make_cam({-64, -64})
   make_units()
@@ -85,7 +86,6 @@ function _update()
     get_splash_screen_input()
   else
     -- update level manager
-    lvl_manager:update()
     current_map:update()
     selector:update()
     cam:update()
@@ -104,7 +104,6 @@ function _draw()
     -- clear screen
     cls()
 
-    lvl_manager:draw()
     current_map:draw()
 
     for unit in all(units) do
@@ -114,6 +113,22 @@ function _draw()
     selector:draw()
 
   end
+end
+
+-- lvl manager code
+players_turn = 1
+players = {palette_orange, palette_blue}
+players_human = {true, false}
+turn_i = 1
+function end_turn()
+  sfx(sfx_end_turn)
+
+  players_turn = players_turn % 2 + 1
+
+  -- increment the turn count if we're on the second player right now
+  -- will need to change if we include multiplayer
+  turn_i += players_turn - 1
+
 end
 
 -- splash screen code
@@ -131,7 +146,7 @@ end
 function tile_pos_to_rect(tile_coord)
   -- given the coordinate of a tile, translate that to a rect of the tile
   local pixel_coords = tile_to_pixel_pos(tile_coord)
-  return {x=pixel_coords[1], y=pixel_coords[2], w=8, h=8 }
+  return {x=pixel_coords[1], y=pixel_coords[2], w=8, h=8}
 end
 
 function pixel_to_tile_pos(pixel_coord)
@@ -168,76 +183,19 @@ function get_selection(p)
     -- the second index is the selection.
 
   local unit = get_unit_at_pos(p)
-  if unit then
+  if unit and not unit.is_resting then
     -- selection is unit
     return {0, unit}
   end
 
   local tile = mget(tile_to_pixel_pos(p))
 
-  if fget(tile, flag_structure) and fget(tile, flag_factory) then
+  if fget(tile, flag_structure) and fget(tile, flag_factory) and (not unit or not unit.is_resting)then
     -- selection is factory
     return {1, tile}
   end
   -- selection is tile
   return {2, tile}
-end
-
--- level manager code
-function make_lvl_manager()
-  lvl_manager = {}
-
-  lvl_manager.level = 1
-
-  lvl_manager.message_pos = tile_to_pixel_pos({8.5, 2})  -- position on screen to display dialogue messages at
-
-  -- components
-
-  -- do_for that can be edited from anywhere. hotswap the callback_fn and do start() to run it
-  lvl_manager.ui_do_for = make_do_for(lvl_manager, 2.5)  
-  -- do_for for special effects like whiting out the screen. hotswap the callback_fn and do start() to run it
-  lvl_manager.effect_do_for = make_do_for(lvl_manager, 20)  
-
-  lvl_manager.init_level = function(self)
-    -- play music
-    music(music_lvl1, 0, music_bitmask)
-
-  end
-
-  lvl_manager.reset_level = function(self)
-    self:destroy_level()
-    self:init_level()
-  end
-
-  lvl_manager.destroy_level = function(self)
-    -- reset all level components
-  end
-
-  lvl_manager.update = function(self)
-  end
-
-  lvl_manager.draw = function(self)
-  end
-
-  lvl_manager.draw_ui_msg = function(self, msg, palette, duration, dont_overwrite)
-    if dont_overwrite and self.ui_do_for.time_left > 0 then
-      return
-    end 
-    self.ui_do_for.callback_fn = function(l)
-      draw_msg(self.message_pos, msg, palette)
-    end 
-    if duration then
-      self.ui_do_for.duration = duration
-    else
-      self.ui_do_for.duration = 5
-    end
-    self.ui_do_for:start()
-  end
-
-  lvl_manager:init_level()
-
-  return lvl_manager
-
 end
 
 function make_cam(p)
@@ -263,6 +221,7 @@ function make_selector(p)
 
   -- {x, y} vector of position
   selector.p = p
+  selector.active = false
   selector.time_since_last_move = 0
   selector.move_cooldown = 0.1
 
@@ -272,7 +231,9 @@ function make_selector(p)
   -- unit selection: 0
   -- unit movement: 1
   -- unit order prompt: 2
-  -- constructing unit: 3
+  -- unit attack prompt: 3
+  -- menu prompt for ending turn: 4
+  -- constructing unit: 4
   selector.selection_type = nil
 
   -- currently selected object
@@ -286,11 +247,24 @@ function make_selector(p)
 
   -- during a prompt, prompt_options will be populated with options
   -- for unit prompt:
-  -- 0 = rest
-  -- 1 = attack
-  -- 2 = capture
+  -- 1 = rest
+  -- 2 = attack
+  -- 3 = capture
+  -- for menu prompt:
+  -- 1 = end turn
   selector.prompt_selected = 1
   selector.prompt_options = {}
+
+  prompt_texts = {}
+  prompt_texts[2] = {}
+  add(prompt_texts[2], "rest")
+  add(prompt_texts[2], "attack")
+  add(prompt_texts[2], "capture")
+  prompt_texts[4] = {}
+  add(prompt_texts[4], "end turn")
+
+  selector.prompt_texts = prompt_texts
+
 
   -- targets within attack range
   selector.attack_targets = {}
@@ -303,11 +277,19 @@ function make_selector(p)
     1)
 
   selector.update = function(self)
+    -- only update selection if it's a human's turn
+    if not players_human[players_turn] then return end
+
+    -- do selector movement
+    if not self.selecting or self.selection_type == 0 then
+      self:move()
+    end
 
     if btnp(4) and not self.selecting then 
       -- start selecting
       self.selecting = true
 
+      -- refac: make get_selection inline
       local selection = get_selection(self.p)
       self.selection = selection[2]
 
@@ -319,6 +301,8 @@ function make_selector(p)
         self.movable_tiles = movable_tiles[1]
         self.selection_type = 0
         self.arrowed_tiles = {self.selection.p}
+      else
+        self:start_menu_prompt()
       end
 
       -- return from selecting
@@ -337,7 +321,10 @@ function make_selector(p)
             self.prompt_selected = 1
           elseif self.prompt_selected < 1 then
             self.prompt_selected = #self.prompt_options
-         end
+          end
+          if #self.prompt_options > 1 then
+            sfx(sfx_prompt_change)
+          end
         end
 
       elseif btnp(4) then 
@@ -356,8 +343,22 @@ function make_selector(p)
           end
         elseif self.selection_type == 2 then
           -- do unit selection prompt
+          if self.prompt_selected == 1 then
+            self.selection.is_resting = true
+            sfx(sfx_unit_rest)
+            self:stop_selecting()
+          elseif self.prompt_selected == 2 then
+            self:start_attack_prompt()
+          else
+            self.selection:capture()
+          end
+        elseif self.selection_type == 4 then
+          -- do menu selection prompt (end turn)
 
-          -- self:stop_selecting()
+          -- if self.prompt_selected == 1 then
+            self:stop_selecting()
+            end_turn()
+          -- end
         end
       elseif btnp(5) then
         -- stop selecting
@@ -377,11 +378,11 @@ function make_selector(p)
 
     end
 
-    -- do selector movement
-    self:move()
   end
 
   selector.draw = function(self)
+    -- only draw the selector if it's a human's turn
+    if not players_human[players_turn] then return end
 
     if self.selecting then
       -- draw selection ui
@@ -392,8 +393,8 @@ function make_selector(p)
             rectfill(t[1], t[2], t[1] + 7, t[2] + 7, (i % 15) + 1)
             print(tostring(i), t[1], t[2], 0)
           else
-            local flip = last_checked_time * 2 % 2 > 1
-            spr(3, t[1], t[2], 1, 1, flip, flip)
+            local flip = last_checked_time * 2 % 2
+            spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
           end
         end
 
@@ -402,19 +403,12 @@ function make_selector(p)
 
       elseif self.selection_type == 2 then
         -- draw rest/attack/capture unit prompt
-        local y_offset = 15
-        local prompt_text
-        for i, prompt in pairs(self.prompt_options) do
-          local palette = nil
-          if prompt == 0 then prompt_text = "rest"
-          elseif prompt == 1 then prompt_text = "attack"
-          else prompt_text = "capture" end
-          if i == self.prompt_selected then palette = palette_pink end
+        self:draw_prompt()
+      elseif self.selection_type == 4 then
+        self:draw_prompt()
 
-          draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, palette)
-          y_offset += 9
-        end
       end
+
     end
 
     -- draw cursor
@@ -436,17 +430,42 @@ function make_selector(p)
   selector.start_unit_prompt = function(self)
     self.selection_type = 2
 
-    self.prompt_options = {0}  -- rest is in options by default
+    self.prompt_options = {1}  -- rest is in options by default
     self.prompt_selected = 1
 
     -- store the attack targets
     self.attack_targets = self.selection:targets()
     if #self.attack_targets > 0 then 
       -- add attack to the prompt if we have targets
-      add(self.prompt_options, 1)
+      add(self.prompt_options, 2)
     end
 
     -- todo: add ability for capturing structures here
+  end
+
+  selector.start_menu_prompt = function(self)
+    self.selection_type = 4
+
+    self.prompt_options = {1}  -- end turn is in options by default
+    self.prompt_selected = 1
+
+    sfx(sfx_prompt_change)
+  end
+
+  selector.draw_prompt = function(self)
+    local y_offset = 15
+    local prompt_text
+    for i, prompt in pairs(self.prompt_options) do
+      local palette = nil
+      prompt_text = self.prompt_texts[self.selection_type][prompt]
+      if i == self.prompt_selected then 
+        palette = palette_pink 
+        prompt_text ..= "!"
+      end
+
+      draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, palette, palette == palette_pink)
+      y_offset += 9
+    end
   end
 
   selector.move = function(self)
@@ -457,7 +476,7 @@ function make_selector(p)
 
     -- move to the position based on input
     -- don't move if we're in any prompt selection_type
-    if self.time_since_last_move > self.move_cooldown and (not self.selecting or self.selection_type == 0) then
+    if self.time_since_last_move > self.move_cooldown then
       if change[1] and change[2] then
         -- if both inputs are down, perform move twice, once for x, once for y
         local move_result = self:move_to(change[1], 0)
@@ -693,14 +712,15 @@ function make_unit(p, sprite, team)
   unit.p = p
   if not team then team = palette_orange end
   unit.team = team
+  unit.cached_animator_fps = 0.4
   
   -- points to move to one at a time
   unit.cached_p = {}
   unit.movement_points = {}
   unit.movement_i = 1
-  unit.is_moving = false
   unit.cached_sprite = sprite -- cached sprite that we can revert to after changing it
-  unit.cached_animator_fps = 0.4
+  unit.is_moving = false
+  unit.is_resting = false
 
   -- components
   unit.animator = make_animator(
@@ -720,6 +740,11 @@ function make_unit(p, sprite, team)
   end
 
   unit.draw = function(self)
+    if self.is_resting then
+      self.animator.palette = 7
+    else
+      self.animator.palette = self.team
+    end
     self.animator:draw()
   end
 
@@ -964,7 +989,6 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   animator.animation_frame = 0
   animator.flip_sprite = false
 
-
   animator.draw = function(self)
     -- update and animate the sprite
     self.time_since_last_frame += delta_time
@@ -984,7 +1008,9 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
       if(self.palette) then
         set_palette(self.palette)
       end
+
       spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1.0, 1.0, self.flip_sprite)
+
       if(self.palette) then
         reset_palette()
       end
@@ -993,7 +1019,7 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   end
 
   animator.draw_outline = function(self, animation_frame)
-    set_palette(palette_black)
+    set_palette(0)
     local offset = -1 
     -- this is black magic. don't smell it don't touch it don't even look at it the wrong way
     zspr(animation_frame, 1, 1, self.parent.p[1] + self.draw_offset[1] + offset, self.parent.p[2] + self.draw_offset[2] + offset, 1.35, self.flip_sprite)
@@ -1101,9 +1127,9 @@ function set_palette(palette)
     pal(9, 14)
     pal(8, 14)
     pal(2, 2)
-  elseif palette == palette_black then
+  else
     for i = 0, 15 do
-      pal(i,  0)
+      pal(i,  palette)
     end
   end
 end
@@ -1164,7 +1190,7 @@ function zspr(sprite, w, h, dx, dy, dz, flip_sprite)
   sspr(8 * (sprite % 16), 8 * flr(sprite / 16), sw, sh, dx, dy, sw * dz - magic_fucking_number, sh * dz - magic_fucking_number, flip_sprite)
 end
 
-draw_msg = function(center_pos, msg, palette)
+draw_msg = function(center_pos, msg, palette, draw_bar)
   msg_length = #msg
 
   local padding = 2
@@ -1192,13 +1218,15 @@ draw_msg = function(center_pos, msg, palette)
     x_pos + msg_length * 4 ,
     y_pos + 5,
     bg_color)
-
-  line(
-    x_pos - padding,
-    y_pos + 5,
-    x_pos + msg_length * 4,
-    y_pos + 5,
-    2)
+  
+  if draw_bar then
+    line(
+      x_pos - padding,
+      y_pos + 5,
+      x_pos + msg_length * 4,
+      y_pos + 5,
+      2)
+  end
 
   -- draw message
   print(msg, x_pos, y_pos - 1, 0)
@@ -1214,13 +1242,13 @@ end
 
 __gfx__
 7700007700000000777770000000000000000000000000000000000000000044000000002200000000000000000000000000000000000000566666555ccccc63
-7000000707700770755000000707070700000000000000000000000000000044000000002200000000000000000000000000000000000000c66666cc5c5c5c66
-00000000070000707567000000700070000000000000000000000000000000440000000022000000000000000000000000000000000000005667665c66666666
-00000000000000007056700007070707000000000000000000000000000000440000000022000000000000000000000000dddd0000000000c66766cc66666666
+7000000707700770755000000070007007070707000000000000000000000044000000002200000000000000000000000000000000000000c66666cc5c5c5c66
+00000000070000707567000007070707007000700000000000000000000000440000000022000000000000000000000000000000000000005667665c66666666
+00000000000000007056700000700070070707070000000000000000000000440000000022000000000000000000000000dddd0000000000c66766cc66666666
 0000000000000000700567000000000000000000000000000000000000000044000000002200000000000000000000000ddddd50000000005666665c66776677
-0000000007000070000056500707070700000000000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
-7000000707700770000005500070007000000000000000000000000000000444000000002220000000000000000000000d555550000000006667666666666666
-7700007700000000000000000707070700000000000000000000000044444443444444443244444400000000000000000067750000000000666766635c5c5c66
+0000000007000070000056500070007007070707000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
+7000000707700770000005500707070700700070000000000000000000000444000000002220000000000000000000000d555550000000006667666666666666
+7700007700000000000000000070007007070707000000000000000044444443444444443244444400000000000000000067750000000000666766635c5c5c66
 0888880008888800000000000000000000000000000000000000000055555553000000003555555500f0000000000000006dd500005555000000000033b33b33
 899999808999998000998000009880000000000000000000000000002222444500000000522222220f4400f0000000000655555000757500000000053bbb5bb3
 8999999889999998099978000992780000000000000000000000000022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
@@ -1423,13 +1451,13 @@ __map__
 003738383838385b383838390000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 000100001f5201d5600e54005520005200b5000850004500005000250000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
-000100001e33032350073400333001330003301334005330023300233000330003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
+000200001e63032650076400363001630006301365005630026300263000630006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600
 00010000313303b33033330033300433005330073300933009330093300a330083300633003330023200032000320003200131000300003000030000300003000430004300013000030000300003000030000300
 000200002e23020230082400724007230082500926005260052500623000220002200022000220002200022000220002200022000220002200021000210002100021000200002000020000200002000020000200
 000300002415023150231502315025150271502714026140221401b1401414023100231002310025100271002710026100221001b100141000010000100001000010000100001000010000100001000010000100
 00020000015500f5501855027550345503e550315000e500035000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00030000195501f550195000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
+0002000027370193700a370003700c0500d0500e0500f050100501205014050180501a0501d05021050260502b05031050380503e050000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
