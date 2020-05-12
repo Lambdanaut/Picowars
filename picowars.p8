@@ -4,7 +4,7 @@ __lua__
 
 version = "0.1"
 
-debug = false
+-- debug = true
 
 -- constants
 map_size_x = 16
@@ -29,6 +29,16 @@ sfx_end_turn = 7
 sfx_infantry_moveout = 14
 sfx_tank_moveout = 15
 sfx_recon_moveout = 16
+sfx_infantry_combat = 22
+sfx_mech_combat = 23
+sfx_recon_combat = 24
+sfx_tank_combat = 25
+
+-- unit_types
+unit_infantry = "infantry"
+unit_mech = "mech"
+unit_recon = "recon"
+unit_tank = "tank"
 
 -- musics
 music_splash_screen = 0
@@ -58,14 +68,19 @@ mobility_tires = 2
 mobility_treads = 3
 
 -- map currently loaded
-current_map = nil
+-- current_map = nil
+
+-- coroutines
+-- active_attack_coroutine = nil
+attack_coroutine_u1 = nil
+attack_coroutine_u2 = nil
 
 -- globals
 in_splash_screen = true
 last_checked_time = 0.0
 delta_time = 0.0  -- time since last frame
 unit_id_i = 0 -- unit id counter. each unit gets a unique id
-
+attack_timer = 0 -- used to space out attack co-routine
 
 -- game loop
 function _init()
@@ -118,7 +133,7 @@ end
 -- lvl manager code
 players_turn = 1
 players = {palette_orange, palette_blue}
-players_human = {true, false}
+players_human = {true, true}
 turn_i = 1
 function end_turn()
   sfx(sfx_end_turn)
@@ -128,6 +143,10 @@ function end_turn()
   -- increment the turn count if we're on the second player right now
   -- will need to change if we include multiplayer
   turn_i += players_turn - 1
+
+  for unit in all(units) do
+    unit.is_resting = false
+  end
 
 end
 
@@ -174,7 +193,7 @@ function get_unit_at_pos(p)
   end
 end
 
-function get_selection(p)
+function get_selection(p, include_resting)
     -- returns a two part table where 
     -- the first index is a flag indicating the selection 
       -- 0: unit
@@ -183,19 +202,43 @@ function get_selection(p)
     -- the second index is the selection.
 
   local unit = get_unit_at_pos(p)
-  if unit and not unit.is_resting then
+  if unit and (include_resting or not unit.is_resting) then
     -- selection is unit
     return {0, unit}
   end
 
   local tile = mget(tile_to_pixel_pos(p))
 
-  if fget(tile, flag_structure) and fget(tile, flag_factory) and (not unit or not unit.is_resting)then
+  if fget(tile, flag_structure) and fget(tile, flag_factory) then
     -- selection is factory
     return {1, tile}
   end
   -- selection is tile
   return {2, tile}
+end
+
+attack_coroutine = function()
+  -- coroutine action that plays out an attack
+
+  -- do attack
+  attack_timer = 0
+  local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
+  attack_coroutine_u2.hp -= damage_done
+  sfx(attack_coroutine_u1.combat_sfx)
+  while attack_timer < 1 do
+    print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 5 - attack_timer * 10, 8)
+    yield()
+  end
+  -- do response attack
+  attack_timer = 0
+  damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
+  attack_coroutine_u1.hp -= damage_done
+  sfx(attack_coroutine_u2.combat_sfx)
+  while attack_timer < 1 do
+    print("-" .. damage_done, attack_coroutine_u1.p[1], attack_coroutine_u1.p[2] - 5 - attack_timer * 10, 8)
+    yield()
+  end
+  attack_coroutine_u1.is_resting = true
 end
 
 function make_cam(p)
@@ -215,13 +258,12 @@ function make_cam(p)
 
 end
 
-
+-- refac: make all of selector a global top level entity. huge token savings (2 for each self. called)
 function make_selector(p)
   selector = {}
 
   -- {x, y} vector of position
   selector.p = p
-  selector.active = false
   selector.time_since_last_move = 0
   selector.move_cooldown = 0.1
 
@@ -233,7 +275,10 @@ function make_selector(p)
   -- unit order prompt: 2
   -- unit attack prompt: 3
   -- menu prompt for ending turn: 4
-  -- constructing unit: 4
+  -- unit attack range selection: 5
+  -- enemy unit movement range selection: 6
+  -- constructing unit: 7
+  -- unit attacking: 8
   selector.selection_type = nil
 
   -- currently selected object
@@ -250,6 +295,8 @@ function make_selector(p)
   -- 1 = rest
   -- 2 = attack
   -- 3 = capture
+  -- for attack prompt:
+  --   each index is an index into self.attack_targets
   -- for menu prompt:
   -- 1 = end turn
   selector.prompt_selected = 1
@@ -265,9 +312,11 @@ function make_selector(p)
 
   selector.prompt_texts = prompt_texts
 
-
   -- targets within attack range
   selector.attack_targets = {}
+
+  -- unit we're actively attacking. used in attack coroutine
+  -- self.attacking_unit = nil
 
   -- components
   selector.animator = make_animator(
@@ -285,47 +334,20 @@ function make_selector(p)
       self:move()
     end
 
-    if btnp(4) and not self.selecting then 
-      -- start selecting
-      self.selecting = true
-
-      -- refac: make get_selection inline
-      local selection = get_selection(self.p)
-      self.selection = selection[2]
-
-      if selection[1] == 0 then
-        -- start unit selection
-        sfx(sfx_select_unit)
-        local movable_tiles = self.selection:get_movable_tiles()
-        merge_tables(movable_tiles[1], movable_tiles[2])
-        self.movable_tiles = movable_tiles[1]
-        self.selection_type = 0
-        self.arrowed_tiles = {self.selection.p}
-      else
-        self:start_menu_prompt()
-      end
-
-      -- return from selecting
-      return
-    end
-
     if self.selecting then
+      -- do selecting
 
+      -- get arrow key directional value. left or down = -1. up or right = +1
       local arrow_val
-      if btnp(2) then arrow_val = 1 elseif btnp(3) then arrow_val = -1 end
-      if arrow_val then
-        if self.selection_type == 2 then
-          -- do unit selection prompt
-          self.prompt_selected = self.prompt_selected + arrow_val
-          if self.prompt_selected > #self.prompt_options then
-            self.prompt_selected = 1
-          elseif self.prompt_selected < 1 then
-            self.prompt_selected = #self.prompt_options
-          end
-          if #self.prompt_options > 1 then
-            sfx(sfx_prompt_change)
-          end
-        end
+      if btnp(2) or btnp(1) then arrow_val = 1 elseif btnp(3) or btnp(0) then arrow_val = -1 end
+
+      if not btn(5) and self.selection_type == 5 then
+        -- end checking unit attack range
+        self:stop_selecting()
+
+      elseif not btn(4) and self.selection_type == 6 then
+        -- end checking enemy unit movement
+        self:stop_selecting()
 
       elseif btnp(4) then 
         if self.selection_type == 0 then
@@ -348,10 +370,18 @@ function make_selector(p)
             sfx(sfx_unit_rest)
             self:stop_selecting()
           elseif self.prompt_selected == 2 then
-            self:start_attack_prompt()
+            self:start_attack_selection()
           else
             self.selection:capture()
           end
+        elseif self.selection_type == 3 then
+          -- do begin attacking
+
+          -- set variables to be used in attack coroutine
+          attack_coroutine_u1 = self.selection
+          attack_coroutine_u2 = self.attack_targets[self.prompt_selected]
+          active_attack_coroutine = cocreate(attack_coroutine)
+          self.selection_type = 7
         elseif self.selection_type == 4 then
           -- do menu selection prompt (end turn)
 
@@ -360,11 +390,13 @@ function make_selector(p)
             end_turn()
           -- end
         end
-      elseif btnp(5) then
+      elseif btnp(5) and self.selection_type ~= 5 and self.selection_type ~= 7 then
         -- stop selecting
-
-        if self.selection_type == 1 or self.selection_type == 2 then
+        -- don't cancel if type is attack range selection or active attacking
+        if 0 < self.selection_type and self.selection_type < 4 then -- if selection type is 1,2, or 3
           -- return unit to start location if he's moved
+        
+          printh("here")
           sfx(sfx_cancel_movement)
           self.selection:unmove()
           self.p = self.selection.p
@@ -372,9 +404,62 @@ function make_selector(p)
 
         self:stop_selecting()
 
+
         return
+      elseif self.selection_type == 2 then
+        -- do unit selection prompt
+        self:update_prompt(arrow_val)
+      elseif self.selection_type == 3 then
+        -- unit attack selection
+        -- selector follows attack target
+
+        self:update_prompt(arrow_val)
+        self.p = self.attack_targets[self.prompt_selected].p
       end
 
+    else
+      -- do not selecting
+
+      -- refac: set globals for button presses each turn. btnp(4) could be btnp_4
+
+      local selection = nil
+      if btnp(4) then
+        selection = get_selection(self.p)
+      elseif btn(5) then
+        selection = get_selection(self.p, true)
+      end
+
+      if selection and selection[1] == 0 then
+        self.selection = selection[2]
+        if btnp(4) then
+          sfx(sfx_select_unit)
+          self.selecting = true
+          if self.selection.team == players[players_turn] then
+            -- start unit selection
+            local movable_tiles = self.selection:get_movable_tiles()
+            merge_tables(movable_tiles[1], movable_tiles[2])
+            self.movable_tiles = movable_tiles[1]
+            self.selection_type = 0
+            self.arrowed_tiles = {self.selection.p}
+          else
+            -- start enemy unit selection
+            local movable_tiles = self.selection:get_movable_tiles()
+            self.movable_tiles = movable_tiles[1]
+            self.selection_type = 6
+          end
+        elseif btnp(5) then
+          sfx(sfx_select_unit)
+          self.selecting = true
+          local movable_tiles = self.selection:get_movable_tiles(1, true)
+          self.movable_tiles = movable_tiles[1]
+          self.selection_type = 5
+        end
+      elseif btnp(4) then
+        self.selecting = true
+        self:start_menu_prompt()
+      end
+      -- return from selecting
+      return
 
     end
 
@@ -385,28 +470,55 @@ function make_selector(p)
     if not players_human[players_turn] then return end
 
     if self.selecting then
-      -- draw selection ui
-      if self.selection_type == 0 then
+      -- draw unit selection ui
+
+      local flip = last_checked_time * 2 % 2  -- used in selection sprite to flip it
+      if self.selection_type == 0 or self.selection_type == 5 or self.selection_type == 6 then
+
         -- select unit
+
         for i, t in pairs(self.movable_tiles) do
           if debug then
             rectfill(t[1], t[2], t[1] + 7, t[2] + 7, (i % 15) + 1)
-            print(tostring(i), t[1], t[2], 0)
+            print(i, t[1], t[2], 0)
           else
-            local flip = last_checked_time * 2 % 2
+
+            if self.selection_type == 5 then
+              pal(7, 8)
+            end
             spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
+            if self.selection_type == 5 then
+              pal(7, 7)
+            end
           end
         end
 
-        -- draw movement arrow
-        self:draw_movement_arrow()
+        if self.selection_type == 0 then
+          -- draw movement arrow
+          self:draw_movement_arrow()
+        end
 
       elseif self.selection_type == 2 then
         -- draw rest/attack/capture unit prompt
         self:draw_prompt()
+      elseif self.selection_type == 3 then
+        -- draw attack prompt
+        for unit in all(self.attack_targets) do
+          pal(7, 8)
+          spr(flip + 3, unit.p[1], unit.p[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
+          pal(7, 7)
+        end
+
       elseif self.selection_type == 4 then
         self:draw_prompt()
 
+      elseif self.selection_type == 7 then
+        if costatus(active_attack_coroutine) == 'dead' then
+          self:stop_selecting()
+        else
+          attack_timer += delta_time  -- update attack timer. used to space out attack co-routine
+          coresume(active_attack_coroutine)
+        end
       end
 
     end
@@ -431,22 +543,36 @@ function make_selector(p)
     self.selection_type = 2
 
     self.prompt_options = {1}  -- rest is in options by default
-    self.prompt_selected = 1
 
     -- store the attack targets
     self.attack_targets = self.selection:targets()
     if #self.attack_targets > 0 then 
       -- add attack to the prompt if we have targets
       add(self.prompt_options, 2)
+      self.prompt_selected = 2
     end
 
     -- todo: add ability for capturing structures here
+
+    self.prompt_selected = #self.prompt_options
   end
 
   selector.start_menu_prompt = function(self)
     self.selection_type = 4
 
     self.prompt_options = {1}  -- end turn is in options by default
+    self.prompt_selected = 1
+
+    sfx(sfx_prompt_change)
+  end
+
+  selector.start_attack_selection = function(self)
+    self.selection_type = 3
+    self.prompt_options = {}
+
+    for i = 1, #self.attack_targets do
+      add(self.prompt_options, i)
+    end
     self.prompt_selected = 1
 
     sfx(sfx_prompt_change)
@@ -465,6 +591,16 @@ function make_selector(p)
 
       draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, palette, palette == palette_pink)
       y_offset += 9
+    end
+  end
+
+  selector.update_prompt = function(self, change_val)
+    if not change_val then return end
+    -- players_turn = players_turn % 2 + 1
+    self.prompt_selected = (self.prompt_selected + change_val) % #self.prompt_options
+    if self.prompt_selected < 1 then self.prompt_selected = #self.prompt_options end
+    if #self.prompt_options > 1 then
+      sfx(sfx_prompt_change)
     end
   end
 
@@ -699,12 +835,13 @@ function make_units()
   units = {}
 
   units[1] = make_infantry({24, 32})
-  units[2] = make_mech({32, 32})
+  units[2] = make_mech({40, 32})
   units[3] = make_recon({64, 32}, palette_blue)
   units[4] = make_tank({64, 48}, palette_blue)
 end
 
 function make_unit(p, sprite, team)
+  -- refac: can put variables into table declaration to save on tokens `unit = {id=foo;hp=bar;}`
   local unit = {}
 
   unit_id_i += 1
@@ -713,7 +850,8 @@ function make_unit(p, sprite, team)
   if not team then team = palette_orange end
   unit.team = team
   unit.cached_animator_fps = 0.4
-  
+  unit.hp = 10
+
   -- points to move to one at a time
   unit.cached_p = {}
   unit.movement_points = {}
@@ -748,13 +886,17 @@ function make_unit(p, sprite, team)
     self.animator:draw()
   end
 
-  unit.get_movable_tiles = function(self)
+  unit.get_movable_tiles = function(self, travel_offset, add_enemy_units_to_return)
     -- returns two tables
     -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
-    -- the second table as all of the tiles they could move to if their own units weren't occupying them. 
+    -- the second table the rest of the tiles they could move to if their own units weren't occupying them. 
+
+    -- travel_offset increases the distance of the search by one. you can determine areas of attack of setting this to 1
+    -- if we want to see the enemy units we can attack, we should also set `add_enemy_units_to_return` to true. 
+    travel_offset = travel_offset or 0
 
     local current_tile = nil
-    local tiles_to_explore = {{self.p, self.travel}}  -- store the {point, travel leftover, steps_moved_so_far}
+    local tiles_to_explore = {{self.p, self.travel + travel_offset}}  -- store the {point, travel leftover, steps_moved_so_far}
     local movable_tiles = {}
     local tiles_with_our_units = {}
     local explore_i = 0  -- index in tiles_to_explore of what we've explored so far
@@ -764,44 +906,45 @@ function make_unit(p, sprite, team)
       explore_i += 1
       current_tile = tiles_to_explore[explore_i]
 
-      if current_tile[2] > 0 then
-        -- if we have any travel left in this tile then explore its neighbors
-        local current_t = current_tile[1] -- helper to get the current tile(without travel)
+      -- explore this tile's neighbors
+      local current_t = current_tile[1] -- helper to get the current tile(without travel)
 
-        -- if we haven't already added this tile to be returned, add it to be returned
-        local has_added_to_movable_tiles = false
-        for t2 in all(movable_tiles) do
-          has_added_to_movable_tiles = points_equal(current_t, t2)
-          if has_added_to_movable_tiles then break end
+      -- if we haven't already added this tile to be returned, add it to be returned
+      local has_added_to_movable_tiles = false
+      for t2 in all(movable_tiles) do
+        has_added_to_movable_tiles = points_equal(current_t, t2)
+        if has_added_to_movable_tiles then break end
+      end
+      if not has_added_to_movable_tiles then
+        if get_unit_at_pos(current_t) then
+          add(tiles_with_our_units, current_t)
+        else
+          add(movable_tiles, current_t)
         end
-        if not has_added_to_movable_tiles then
-          if get_unit_at_pos(current_t) then
-            add(tiles_with_our_units, current_t)
-          else
-            add(movable_tiles, current_t)
-          end
+      end
+
+      -- add all neighboring tiles to the explore list, while reducing their travel leftover
+      for t in all(get_tile_adjacents(current_t)) do
+
+        -- check the travel reduction for a the tile's type
+        local travel_reduction = self:tile_mobility(mget(t[1] / 8, t[2] / 8))
+        local travel_left = current_tile[2] - travel_reduction
+
+        -- see if we've already checked this tile. if we have and the cost to get to it was lower, don't explore the new tile.
+        local checked = false
+        for t2 in all(tiles_to_explore) do
+
+          checked = points_equal(t, t2[1]) and travel_left <= t2[2]
+          if checked then break end
         end
 
-        -- add all neighboring tiles to the explore list, while reducing their travel leftover
-        for t in all(get_tile_adjacents(current_t)) do
-
-          -- check the travel reduction for a the tile's type
-          local travel_reduction = self:tile_mobility(mget(t[1] / 8, t[2] / 8))
-          local travel_left = current_tile[2] - travel_reduction
-
-          -- see if we've already checked this tile. if we have and the cost to get to it was lower, don't explore the new tile.
-          local checked = false
-          for t2 in all(tiles_to_explore) do
-
-            checked = points_equal(t, t2[1]) and travel_left <= t2[2]
-            if checked then break end
-          end
-
-          local unit_at_tile = get_unit_at_pos(t)
-          if not checked and (not unit_at_tile or unit_at_tile.team == self.team) then
-            local new_tile = {t, travel_left}
-            add(tiles_to_explore, new_tile)
-          end
+        local unit_at_tile = get_unit_at_pos(t)
+        if not checked and (not unit_at_tile or unit_at_tile.team == self.team) and travel_left > 0 then
+          local new_tile = {t, travel_left}
+          add(tiles_to_explore, new_tile)
+        end
+        if add_enemy_units_to_return and unit_at_tile and unit_at_tile.team ~= self.team then
+          add (movable_tiles, t)
         end
       end
     end
@@ -860,24 +1003,25 @@ function make_unit(p, sprite, team)
     else
       -- no more points left. stop moving
       selector:start_unit_prompt()  -- change to select type unit prompt
+
       self:cleanup_move()
     end
 
-    unit.unmove = function(self)
-      -- un-does a move, moving the unit back to its start location
-      self.p = self.cached_p
-      self:cleanup_move()
-    end
+  end
 
-    unit.cleanup_move = function(self)
-      self.animator.sprite = self.cached_sprite  -- reset animator to default state
-      self.animator.fps = self.cached_animator_fps
-      self.animator.flip_sprite = false
-      self.is_moving = false
-      self.movement_i = 1
-      self.movement_points = {}
-    end
+  unit.unmove = function(self)
+    -- un-does a move, moving the unit back to its start location
+    self.p = self.cached_p
+    self:cleanup_move()
+  end
 
+  unit.cleanup_move = function(self)
+    self.animator.sprite = self.cached_sprite  -- reset animator to default state
+    self.animator.fps = self.cached_animator_fps
+    self.animator.flip_sprite = false
+    self.is_moving = false
+    self.movement_i = 1
+    self.movement_points = {}
   end
 
   unit.tile_mobility = function(self, tile)
@@ -910,6 +1054,10 @@ function make_unit(p, sprite, team)
     return targets
   end
 
+  unit.calculate_damage = function(self, u2)
+    return max(0, flr(self.damage_chart[u2.type] * self.hp / 10))
+  end
+
   return unit
 end
 
@@ -920,10 +1068,20 @@ function make_infantry(p, team)
     team
     )
 
+  unit.type = unit_infantry
   unit.mobility_type = mobility_infantry
   unit.travel = 4
   unit.damage = 1
   unit.moveout_sfx = sfx_infantry_moveout
+  unit.combat_sfx = sfx_infantry_combat
+
+  -- create damage chart
+  dc = {}
+  dc[unit_infantry] = 6
+  dc[unit_mech] = 5
+  dc[unit_recon] = 1
+  dc[unit_tank] = 1
+  unit.damage_chart = dc
 
   return unit
 end
@@ -935,10 +1093,20 @@ function make_mech(p, team)
     team
     )
 
+  unit.type = unit_mech
   unit.mobility_type = mobility_mech
   unit.travel = 3
   unit.damage = 1
   unit.moveout_sfx = sfx_infantry_moveout
+  unit.combat_sfx = sfx_mech_combat
+
+  -- create damage chart
+  dc = {}
+  dc[unit_infantry] = 7
+  dc[unit_mech] = 5
+  dc[unit_recon] = 9
+  dc[unit_tank] = 5
+  unit.damage_chart = dc
 
   return unit
 end
@@ -950,10 +1118,20 @@ function make_recon(p, team)
     team
     )
 
+  unit.type = unit_recon
   unit.mobility_type = mobility_tires
   unit.travel = 10
   unit.damage = 1
   unit.moveout_sfx = sfx_recon_moveout
+  unit.combat_sfx = sfx_recon_combat
+
+  -- create damage chart
+  dc = {}
+  dc[unit_infantry] = 9
+  dc[unit_mech] = 6
+  dc[unit_recon] = 9
+  dc[unit_tank] = 1
+  unit.damage_chart = dc
 
   return unit
 end
@@ -965,10 +1143,20 @@ function make_tank(p, team)
     team
     )
 
+  unit.type = unit_tank
   unit.mobility_type = mobility_treads
   unit.travel = 7
   unit.damage = 1
   unit.moveout_sfx = sfx_tank_moveout
+  unit.combat_sfx = sfx_tank_combat
+
+  -- create damage chart
+  dc = {}
+  dc[unit_infantry] = 5
+  dc[unit_mech] = 4
+  dc[unit_recon] = 9
+  dc[unit_tank] = 3
+  unit.damage_chart = dc
 
   return unit
 end
@@ -1467,3 +1655,14 @@ __sfx__
 00020000146401a6002065021640266102064018600146501864021600266301b6201065012610176401d6002162028640226501a6201260013630176001964020640296102860024620216501b630166000f620
 000300000c2400825007240052500324002250012400723007240062300524004230032400223009220082300722006230042200423003220022200a240092300824007230062400523003240022300124001230
 00020000130501605022650190301b03021640256401d0301b06019030170201d610106100e050296400a0201d620080200704026620106200305002030010402563001030196201962013650050102261005010
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000400003f6500465000650026503f6500365000650026503f6500265000650056503f6500065000650006503f6500465001650006503f6500465000650066503f65000650006500065000650006500065000650
+000400003966034660336502f6502965025650226500c6500b6500865006650046500365003650026500265002650036500565007650076500460000600066003f60000600006000060000600006000060000600
+000300003f650046503f650026503f650036503f650026503f650026503f650056503f650036503f650046503f650046503f650076503f650046503f650066503f65000650006500065000650006500065000650
+0003000032670396703c6703e6703b66037660356602f6602a6601f660196601565012650106500d6500c6500a6500965008650066500565007640066400b6400a64006640036400363003630036300363008630
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000300003f600046003f600026003f600036003f600026003f600026003f600056003f600036003f600046003f600046003f600076003f600046003f600066003f60000600006000060000600006000060000600
