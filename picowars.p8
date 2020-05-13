@@ -3,6 +3,7 @@ version 23
 __lua__
 
 version = "0.1"
+-- refac: delete lots of locals and check for bugs
 
 -- debug = true
 
@@ -69,7 +70,7 @@ flag_plain = 6
 flag_structure = 1  -- required for structure
 flag_city = 2
 flag_capital = 3
-flag_factory = 4
+flag_base = 4
 
 flag_unit = 2
 
@@ -144,7 +145,7 @@ end
 
 -- lvl manager code
 players_turn = 1
-players = {palette_orange, palette_pink}
+players = {palette_orange, palette_green}
 players_human = {true, true}
 turn_i = 1
 function end_turn()
@@ -209,7 +210,7 @@ function get_selection(p, include_resting)
     -- returns a two part table where 
     -- the first index is a flag indicating the selection 
       -- 0: unit
-      -- 1: factory
+      -- 1: base
       -- 2: tile
     -- the second index is the selection.
 
@@ -221,12 +222,32 @@ function get_selection(p, include_resting)
 
   local tile = mget(tile_to_pixel_pos(p))
 
-  if fget(tile, flag_structure) and fget(tile, flag_factory) then
-    -- selection is factory
+  if fget(tile, flag_structure) and fget(tile, flag_base) then
+    -- selection is base
     return {1, tile}
   end
   -- selection is tile
   return {2, tile}
+end
+
+function get_tile_info(tile)
+  -- returns the tile name and its defense
+  if fget(tile, flag_structure) then
+    if fget(tile, flag_city) then return {"city★★★", 4}
+    elseif fget(tile, flag_capital) then return {"hq★★★★", 5}
+    elseif fget(tile, flag_base) then return {"base★★★", 4}
+    end
+  end
+  if fget(tile, flag_terrain) then
+    if fget(tile, flag_road) then return {"road", 1}
+    elseif fget(tile, flag_plain) then return {"plain★", 2}
+    elseif fget(tile, flag_forest) then return {"wood★★", 3}
+    elseif fget(tile, flag_mountain) then return {"mntn★★★★", 5}
+    elseif fget(tile, flag_river) then return {"river", 1}
+    elseif fget(tile, flag_ocean) then return {"ocean", 1}
+    end
+  end
+  return {"unmovable", 0} -- no info
 end
 
 attack_coroutine = function()
@@ -433,7 +454,6 @@ function make_selector(p)
         if 0 < self.selection_type and self.selection_type < 4 then -- if selection type is 1,2, or 3
           -- return unit to start location if he's moved
         
-          printh("here")
           sfx(sfx_cancel_movement)
           self.selection:unmove()
           self.p = self.selection.p
@@ -530,6 +550,17 @@ function make_selector(p)
           end
         end
 
+        if last_checked_time % 2 > 1 then
+          for u in all(units) do
+            set_palette(u.team)
+            local offset = 2
+            if u.hp == 10 then offset = 0 end
+            rectfill(u.p[1], u.p[2] + 1, u.p[1] + 6, u.p[2] + 5, 8)
+            print(u.hp, u.p[1] + offset, u.p[2] + 1, 0)
+            reset_palette()
+          end
+        end
+
         if self.selection_type == 0 then
           -- draw movement arrow
           self:draw_movement_arrow()
@@ -570,18 +601,24 @@ function make_selector(p)
     end
 
     -- draw stats/selection bar at top of screen 
+    local tile = mget(self.p[1] / 8, self.p[2] / 8)
+    local tile_info = get_tile_info(tile)
     local player = players[players_turn]
     set_palette(player)
     local x_corner = cam.p[1]
     local y_corner = cam.p[2]
-    rectfill(x_corner, y_corner, x_corner + 80, y_corner + 19, 8)  -- background
+    rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
     rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0)  -- portrait border
     rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0)  -- team icon border
     line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2)  -- background
     reset_palette(player)
-    print(player, x_corner + 28, y_corner + 3, 0)
+    print(player, x_corner + 29, y_corner + 3, 0) -- team name
+    print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
     spr(co_icon[player], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
     spr(palette_icon[player], x_corner + 19, y_corner + 2, 1, 1)  -- icon
+    spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
+
+    local selection = get_selection(self.p)
 
   end
 
@@ -890,8 +927,10 @@ function make_units()
 
   units[1] = make_infantry({24, 32})
   units[2] = make_mech({40, 32})
-  units[3] = make_recon({64, 32}, palette_pink)
-  units[4] = make_tank({64, 48}, palette_pink)
+  units[3] = make_tank({24, 40})
+  units[4] = make_infantry({64, 32}, palette_green)
+  units[5] = make_recon({64, 40}, palette_green)
+  units[6] = make_tank({64, 48}, palette_green)
 end
 
 function make_unit(p, sprite, team)
@@ -1086,7 +1125,6 @@ function make_unit(p, sprite, team)
 
   unit.tile_mobility = function(self, tile)
     -- returns the mobility cost for traversing a tile for the unit's mobility type
-    if fget(tile, flag_structure) then return 1 end
     if fget(tile, flag_terrain) then
       if fget(tile, flag_road) then return 1
       elseif fget(tile, flag_plain) then
@@ -1101,7 +1139,7 @@ function make_unit(p, sprite, team)
         elseif self.mobility_type == mobility_mech then return 1
         else return 255 end
       end
-    end
+    elseif fget(tile, flag_structure) then return 1 end
     return 255 -- unwalkable if all other options are exhausted
   end
 
@@ -1115,7 +1153,9 @@ function make_unit(p, sprite, team)
   end
 
   unit.calculate_damage = function(self, u2)
-    return max(0, flr(self.damage_chart[u2.type] * self.hp / 10 + rnd(1.5)))
+    local tile_defense = get_tile_info(mget(u2.p[1] / 8, u2.p[2] / 8))[2]
+    printh(tile_defense)
+    return max(0, flr(self.damage_chart[u2.type] * 1.25 * self.hp / 10 / tile_defense + rnd(1.5)))
   end
 
   return unit
@@ -1456,14 +1496,14 @@ ff1ff1f08f1f17770995990029555592000000000000000000000000000000000000000000000000
 000000000088880008899880089aa980089009800900009000900000000008000000000000000000000000000000000000000000000000000000000000000000
 00000000070000700888888000899800008998000890008000000090080000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000007008800780088008a008800a0080980008000000009000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000080005ccccc6552000000000000440000000000000000
-08888800088888000099800000988000000000000000000000000000000000000000000000000000000880002ccccc22cc000000000000450000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000080005ccccc6522000000000000440000000000000000
+08888800088888000099800000988000000000000000000000000000000000000000000000000000000880002ccccc22cc000000000000440000000000000000
 89999980899999800999780009927800000000000000000000000000000000000000000000000000008888882ccccc22cc000000000000cc0000000000000000
 89999998899999980999185599921855000000000000000000000000000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
 222222202222222009999900999999550000000000000000000000000000000000000000000000000088888800000000cc000000000000cc0000000000000000
 ffff1f00788f1f7722292220222222200000000000000000000000000000000000000000000000000008800000000000cc000000000000cc0000000000000000
-088fff70788fff752928292029898982000000000000000000000000000000000000000000000000000080000000000062000000000000cc0000000000000000
-02877777728888772220222002222220000000000000000000000000000000000000000000000000000000000000000022000000000000464ccccc4400000000
+088fff70788fff752928292029898982000000000000000000000000000000000000000000000000000080000000000022000000000000cc0000000000000000
+02877777728888772220222002222220000000000000000000000000000000000000000000000000000000000000000022000000000000445ccccc6400000000
 08888800008888800000000000000000000000000000000000000000000000000088800000000000000000000000000033555555555555555555533300000000
 89999980689999980099900000999900000000000000000000000000000000000088800000000000000000000000000035ccccccccccccccccccc63300000000
 8888888889999999099999000999999000000000000000000000000000000000008880000000088888888888888000005ccccccccccccccccccccc6300000000
@@ -1675,7 +1715,7 @@ __label__
 000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 __gff__
-00000000000000212121000000004343000000000000002121210100060a1209000000000000002121211111030343000000000000000001010100410303434300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000505050000000000000000000000000005050505
+00000000000000212121000000000303000000000000002121210100060a1209000000000000002121211111030303000000000000000021212100410303030300000000000000000000000000000000000000000000000000000021212121000000000000000000000000000505050000000000000000000000000005050505
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0000000018080808080828000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
