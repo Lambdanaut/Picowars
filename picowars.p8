@@ -11,7 +11,7 @@ __lua__
 version = "0.1"
 -- refac: delete lots of locals and check for bugs
 
--- debug = true
+debug = true
 
 
 -- palettes
@@ -42,6 +42,8 @@ sfx_cancel_movement = 5
 sfx_prompt_change = 6
 sfx_end_turn = 7
 sfx_unit_death = 8
+sfx_capturing = 9
+sfx_captured = 10
 sfx_infantry_moveout = 14  -- refac: unit sounds moved to external
 sfx_tank_moveout = 15
 sfx_recon_moveout = 16
@@ -97,6 +99,7 @@ unit_types = {}
 -- coroutines
 -- active_attack_coroutine = nil
 -- active_ai_coroutine = nil
+-- currently_attacking = false
 attack_coroutine_u1 = nil
 attack_coroutine_u2 = nil
 
@@ -111,12 +114,16 @@ memory_i = 0x4300 -- counter to determine where we are in reading from memory
 function _init()
   load_assets()
 
+  make_selector()
   make_war_maps()
   current_map = war_maps[1]
   current_map:load()
-  make_selector({0, 0})
-  make_cam({-64, -64})
+  make_cam()
   make_units()
+
+
+  -- update the global players_turn_team to be the palette of the players turn
+  players_turn_team = players[players_turn]
 end
 
 function _update()
@@ -131,6 +138,9 @@ function _update()
 
   for unit in all(units) do
     unit:update()
+  end
+  for struct in all(structures) do
+    struct:update()
   end
 end
 
@@ -170,11 +180,13 @@ players_reversed[players[1]] = 1
 players_reversed[players[2]] = 2
 players_human = {true, false}
 players_hqs = {}  -- the hqs for the two players
+players_gold = {0, 0}
 turn_i = 1
 function end_turn()
   sfx(sfx_end_turn)
 
   players_turn = players_turn % 2 + 1
+  players_turn_team = players[players_turn]
 
   -- increment the turn count if we're on the second player right now
   -- will need to change if we include multiplayer
@@ -182,6 +194,20 @@ function end_turn()
 
   for unit in all(units) do
     unit.is_resting = false
+
+    -- heal all units on cities
+    for struct in all(structures) do
+      if unit.team == players_turn_team and struct.team == players_turn_team and points_equal(unit.p, struct.p) then
+        unit.hp = min(unit.hp + 2, 10)
+      end
+    end
+  end
+
+  for struct in all(structures) do
+    if struct.type == 2 and struct.team == players_turn_team then
+      -- add income for each city
+      players_gold[players_turn] += 1
+    end
   end
 
 end
@@ -190,12 +216,11 @@ end
 
 function ai_update()
   if players_human[players_turn] then return end  -- don't do ai for humans
-  ai_team = players[players_turn]  -- get team of ai for use in ai functions
 
   -- update ai's units
   ai_units = {}
   for u in all(units) do
-    if u.team == ai_team then
+    if u.team == players_turn_team then
       add(ai_units, u)
     end
   end
@@ -229,7 +254,7 @@ end
 function ai_coroutine()
   printh("starting ai_coroutine\n---------------------")
   -- 3 waves of passing through our units
-  for i = 1, 3 do
+  for i = 1, 2 do
     for u in all(ai_units) do 
       if not u.is_resting then
         -- get unit's movable tiles
@@ -246,47 +271,102 @@ function ai_coroutine()
         end
 
         -- determine best fight to take
+        local in_danger
         local best_fight_u
         local best_fight_pos
         local best_fight_total_gain = -32767  -- start at negative infinity
+
         for t, units in pairs(attackables) do
           for u2 in all(units) do
             -- simulate us attacking them and them attacking back
-            local gain = u:calculate_damage(u2)
-            local loss = u2:calculate_damage(u, t, u2.hp - gain)
-            if gain > loss then
-              best_fight_total_gain = gain - loss
+            local damage_done = u:calculate_damage(u2)
+            gain = (damage_done - damage_done + min(0, u2.hp - damage_done)) * u2.cost
+            local damage_loss = u2:calculate_damage(u, t, u2.hp - damage_done)
+            loss = (damage_loss - damage_done + min(0, u.hp - damage_loss)) * u.cost
+            local difference = gain - loss
+            if gain >= loss and difference > best_fight_total_gain then
+              best_fight_total_gain = difference
               best_fight_u = u2
               best_fight_pos = t
+            elseif difference < 15 then
+              -- todo add in danger code
+              -- in_danger = true
             end
           end
         end
 
-        -- take the fight
-        if best_fight_pos then
-          local path = ai_pathfinding(u, best_fight_pos)
-          u:move(path)
-          while u.is_moving do
-            selector.p = u.p
-            yield()
-          end
+        -- pathfind to enemy hq by default
+        local goal = players_hqs[1].p
+
+        if in_danger then
+          -- retreat
+          goal = players_hqs[2].p
+
+        elseif best_fight_pos then
+          ai_move(u, best_fight_pos)
 
           -- do attack
           attack_coroutine_u1 = u
           attack_coroutine_u2 = best_fight_u
           attack_coroutine()
+          break  -- end ai for this unit
         end
 
-        -- pathfind to enemy hq
-        -- local path = ai_pathfinding(u, {8, 56})
+
+        if ai_pathfinding_h(goal, u.p) < 5 and u.index > 2 then
+          -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
+          goal = players_hqs[2].p
+        elseif u.index < 3 then
+          -- if we're an infantry or mech, navigate to nearest capturable structure
+          local nearest_struct
+          local nearest_struct_d = 32767
+          for struct in all(structures) do
+            local d = ai_pathfinding_h(u.p, struct.p)
+            if struct.team ~= players_turn_team and d < nearest_struct_d then
+              nearest_struct = struct
+              nearest_struct_d = d
+            end
+          end
+          goal = nearest_struct.p
+        end
+
+        local path = ai_pathfinding(u, goal, true)
+        local path_movable = {}
+        for t in all(path) do
+          if point_in_table(t, unit_movable_tiles) then
+            add(path_movable, t)
+          end
+        end
+
+        -- find point in path that is closest to enemy's hq
+        local p = point_closest_to_p(path_movable, goal)
+        ai_move(u, p)
+
       end
     end
   end
   end_turn()
 
 end
+  
+function ai_move(u, p)
+  local path = ai_pathfinding(u, p)
+  u:move(path)
+  while u.is_moving do
+    selector.p = u.p
+    yield()
+  end
+  if u.index < 3 then
+    for struct in all(structures) do
+      if points_equal(struct.p, u.p) then
+        struct:capture(u)
+      end
+    end
+  end
+  u.is_resting = true
+end
 
-function ai_pathfinding(unit, target)
+function ai_pathfinding(unit, target, ignore_enemy_units)
 
   -- draw marker on unit we're pathfinding for
   if debug then rectfill(unit.p[1], unit.p[2], unit.p[1] + 8, unit.p[2] + 8) end
@@ -333,10 +413,11 @@ function ai_pathfinding(unit, target)
     for t in all(get_tile_adjacents(current_t)) do
 
       local unit_at_t = get_unit_at_pos(t)
-      if not unit_at_t then
-        local new_g_score = current_t_g_score + unit:tile_mobility(mget(t[1] / 8, t[2] / 8))
+      if ignore_enemy_units or not unit_at_t or unit_at_t.team == unit.team then
+        local tile_m = unit:tile_mobility(mget(t[1] / 8, t[2] / 8))
+        local new_g_score = current_t_g_score + tile_m
 
-        if new_g_score < table_point_index(g_scores, t) then
+        if new_g_score < table_point_index(g_scores, t) and tile_m < 255 then
           -- if the new g_score is less than the old one for this tile, record it
           -- and set the parent to be equal to the current tile
 
@@ -367,24 +448,18 @@ function ai_get_melee_attackables_at_pos(p)
   local attackables = {}
   for t in all(get_tile_adjacents(p)) do
     local u = get_unit_at_pos(t)
-    if u and u.team ~= ai_team then
+    if u and u.team ~= players_turn_team then
       add(attackables, u)
     end
   end
   return attackables
 end
 
-
 -- tile utilities
 function tile_pos_to_rect(tile_coord)
   -- given the coordinate of a tile, translate that to a rect of the tile
   local pixel_coords = tile_to_pixel_pos(tile_coord)
   return {x=pixel_coords[1], y=pixel_coords[2], w=8, h=8}
-end
-
-function pixel_to_tile_pos(pixel_coord)
-  -- given coordinates in pixels, translate that to a tile position
-  return {pixel_coord[1] / 8, pixel_coord[2] / 8}
 end
 
 function tile_to_pixel_pos(tile_coord)
@@ -436,30 +511,45 @@ function get_tile_info(tile)
   if fget(tile, flag_structure) then
     local team
     if fget(tile, flag_player_1_owner) then team = players[1] elseif fget(tile, flag_player_2_owner) then team = players[2] end
-    if fget(tile, flag_capital) then return {"hq★★★★", 5, 1, team}
-    elseif fget(tile, flag_city) then return {"city★★★", 4, 2, team}
-    elseif fget(tile, flag_base) then return {"base★★★", 4, 3, team}
+    if fget(tile, flag_capital) then return {"hq★★★★", 0.25, 1, team}
+    elseif fget(tile, flag_city) then return {"city★★★", 0.4, 2, team}
+    elseif fget(tile, flag_base) then return {"base★★★", 0.4, 3, team}
     end
   end
   if fget(tile, flag_terrain) then
-    if fget(tile, flag_road) then return {"road", 1}
-    elseif fget(tile, flag_plain) then return {"plain★", 2}
-    elseif fget(tile, flag_forest) then return {"wood★★", 3}
-    elseif fget(tile, flag_mountain) then return {"mntn★★★★", 5}
-    elseif fget(tile, flag_river) then return {"river", 1}
-    elseif fget(tile, flag_ocean) then return {"ocean", 1}
+    if fget(tile, flag_road) then return {"road", 1.0}
+    elseif fget(tile, flag_plain) then return {"plain★", 0.8}
+    elseif fget(tile, flag_forest) then return {"wood★★", 0.6}
+    elseif fget(tile, flag_mountain) then return {"mntn★★★★", 0.25}
+    elseif fget(tile, flag_river) then return {"river", 1.0}
+    elseif fget(tile, flag_ocean) then return {"ocean", 1.0}
     end
   end
   return {"unmovable", 0} -- no info
 end
 
+function point_closest_to_p(points, p)
+  -- returns the point in points closest to p that doesn't have a unit in it
+  local closest = points[1]
+  local closest_d = 32767
+  for p2 in all(points) do
+    local d = ai_pathfinding_h(p, p2)
+    if d < closest_d and not get_unit_at_pos(p2) then
+      closest = p2
+      closest_d = d
+    end
+  end
+  return closest
+end
+
 attack_coroutine = function()
   -- coroutine action that plays out an attack
+  currently_attacking = true
 
   -- do attack
   attack_timer = 0
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
-  attack_coroutine_u2.hp -= damage_done
+  attack_coroutine_u2.hp = max(0, attack_coroutine_u2.hp - damage_done)
   sfx(attack_coroutine_u1.combat_sfx)
   while attack_timer < 1.25 do
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
@@ -469,7 +559,7 @@ attack_coroutine = function()
   if attack_coroutine_u2.hp > 0 then
     attack_timer = 0
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
-    attack_coroutine_u1.hp -= damage_done
+    attack_coroutine_u1.hp = max(0, attack_coroutine_u1.hp - damage_done)
     sfx(attack_coroutine_u2.combat_sfx)
     while attack_timer < 1.25 do
       print("-" .. damage_done, attack_coroutine_u1.p[1], attack_coroutine_u1.p[2] - 4 - attack_timer * 8, 8)
@@ -499,12 +589,15 @@ attack_coroutine = function()
   end
   explode_at = nil
 
+  currently_attacking = false
+
 end
 
-function make_cam(p)
+function make_cam()
   cam = {}
 
-  cam.p = p
+  -- start cam off at the selector position
+  cam.p = {selector.p[1] - 64, selector.p[2] - 64}
 
   cam.update = function (self) 
     -- move camera with the selector
@@ -526,11 +619,11 @@ function make_cam(p)
 end
 
 -- refac: make all of selector a global top level entity. huge token savings (2 for each self. called)
-function make_selector(p)
+function make_selector()
   selector = {}
 
   -- {x, y} vector of position
-  selector.p = p
+  selector.p = {0, 0}
   selector.time_since_last_move = 0
   selector.move_cooldown = 0.1
 
@@ -632,14 +725,15 @@ function make_selector(p)
           end
         elseif self.selection_type == 2 then
           -- do unit selection prompt
-          if self.prompt_selected == 1 then
+          if self.prompt_options[self.prompt_selected] == 1 then
             self.selection.is_resting = true
             sfx(sfx_unit_rest)
             self:stop_selecting()
-          elseif self.prompt_selected == 2 then
+          elseif self.prompt_options[self.prompt_selected] == 2 then
             self:start_attack_selection()
           else
             self.selection:capture()
+            self:stop_selecting()
           end
         elseif self.selection_type == 3 then
           -- do begin attacking
@@ -678,7 +772,6 @@ function make_selector(p)
       elseif self.selection_type == 3 then
         -- unit attack selection
         -- selector follows attack target
-
         self:update_prompt(arrow_val)
         self.p = self.attack_targets[self.prompt_selected].p
       end
@@ -700,7 +793,7 @@ function make_selector(p)
         if btnp(4) then
           sfx(sfx_select_unit)
           self.selecting = true
-          if self.selection.team == players[players_turn] then
+          if self.selection.team == players_turn_team then
             -- start unit selection
             local movable_tiles = self.selection:get_movable_tiles()
             merge_tables(movable_tiles[1], movable_tiles[2])
@@ -758,17 +851,6 @@ function make_selector(p)
             end
           end
 
-          if last_checked_time % 2 > 1 then
-            for u in all(units) do
-              set_palette(u.team)
-              local offset = 2
-              if u.hp == 10 then offset = 0 end
-              rectfill(u.p[1], u.p[2] + 1, u.p[1] + 6, u.p[2] + 5, 8)
-              print(u.hp, u.p[1] + offset, u.p[2] + 1, 0)
-              reset_palette()
-            end
-          end
-
           if self.selection_type == 0 then
             -- draw movement arrow
             self:draw_movement_arrow()
@@ -808,29 +890,44 @@ function make_selector(p)
       end
     end
 
+    if last_checked_time % 3 > 1.75 and not currently_attacking then
+      for u in all(units) do
+        if u.hp < 10 then
+          set_palette(u.team)
+          rectfill(u.p[1] + 1, u.p[2], u.p[1] + 5, u.p[2] + 6, 8)
+          print(u.hp, u.p[1] + 2, u.p[2] + 1, 0)
+          reset_palette()
+        end
+      end
+    end
+
     -- draw stats/selection bar at top of screen 
     local tile = mget(self.p[1] / 8, self.p[2] / 8)
     local tile_info = get_tile_info(tile)
-    local struct_type = tile_info[3]
-    local player = players[players_turn]
-    set_palette(player)
+    local struct_type = tile_info[3] 
+    set_palette(players_turn_team)
     local x_corner = cam.p[1]
     local y_corner = cam.p[2]
     rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
     rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0)  -- portrait border
     rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0)  -- team icon border
     line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2)  -- background
-    reset_palette(player)
-    print(player, x_corner + 29, y_corner + 3, 0) -- team name
+    reset_palette(players_turn_team)
+    print(players_turn_team, x_corner + 29, y_corner + 3, 0) -- team name
     print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
-    spr(co_icon[player], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
-    spr(palette_icon[player], x_corner + 19, y_corner + 2, 1, 1)  -- icon
+    spr(co_icon[players_turn_team], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
+    spr(palette_icon[players_turn_team], x_corner + 19, y_corner + 2, 1, 1)  -- icon
 
     -- draw tile sprite
-    if struct_type then
-      -- change sprite to uncaptures structure we don't draw their colors wrong
-      local type_to_sprite_map = {28, 29, 30}
-      tile = type_to_sprite_map[struct_type]
+    for struct in all(structures) do
+      if points_equal(struct.p, self.p) then
+        -- change sprite to uncaptured structure so we don't draw their colors wrong
+        local type_to_sprite_map = {28, 29, 30}
+        tile = type_to_sprite_map[struct_type]
+        rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
+        print(struct.capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
+        break
+      end
     end
     spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
 
@@ -856,7 +953,16 @@ function make_selector(p)
     if #self.attack_targets > 0 then 
       -- add attack to the prompt if we have targets
       add(self.prompt_options, 2)
-      self.prompt_selected = 2
+    end
+
+    for struct in all(structures) do
+      if points_equal(struct.p, self.selection.p) then
+        -- ensure we're an infantry or mech with `self.selection.index < 3`
+        if self.selection.index < 3 and struct.team ~= players_turn_team then 
+          -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
+          add(self.prompt_options, 3)
+        end
+      end
     end
 
     -- todo: add ability for capturing structures here
@@ -1126,8 +1232,31 @@ function make_war_map(r)
   war_map.draw = function(self)
     -- set_palette(self.map_palette)
 
+
+    -- fillp(0b0100000101000001)
+    -- rectfill(self.r[1] - 256, self.r[2], self.r[1] + self.r[3] + 256, self.r[2] - 256, 0x1c)
+    -- rectfill(self.r[1] - 256, self.r[2], self.r[1], self.r[2] + self.r[4] + 256, 0x1c)
+    -- fillp(0)
+
+    -- fill background in with patterns
+    local x = self.r[1]
+    local y = self.r[2]
+    local w = self.r[3]
+    local h = self.r[4]
+    fillp(0b1111011111111101)
+    rectfill(x-38, y-38, x+w+45, y+h+45, 0x1c)
+    fillp(0b1011111010111110)
+    rectfill(x-30, y-30, x+w+37, y+h+37, 0x1c)
+    fillp(0b0101101001011010)
+    rectfill(x-24, y-24, x+w+29, y+h+29, 0x1c)
+    fillp(0b0100000101000001)
+    rectfill(x-16, y-16, x+w+23, y+h+23, 0x1c)
+    fillp(0)
+    -- fill with blue sea
+    rectfill(x-8, y-8, x+w+15, y+h+15, 12)
+
+
     -- fill background with blue water
-    rectfill(-128, -128, 256, 256, 12)
     map(0, 0, 0, 0, 18, 18)
 
     -- reset_palette()
@@ -1151,7 +1280,7 @@ function make_war_map(r)
 end
 
 function make_structure(struct_type, p, team)
-  struct = {}
+  local struct = {}
 
   -- structure types:
   -- 1: hq
@@ -1160,22 +1289,55 @@ function make_structure(struct_type, p, team)
   struct.type = struct_type
   struct.p = p
   struct.team = team
-  struct.capture = 20  -- capture left
+  struct.capture_left = 20
 
   -- set structure sprite based on the structure type
   local struct_sprite
   if struct_type == 1 then 
     struct_sprite = 224 
     players_hqs[players_reversed[team]] = struct  -- add this hq to the list of hqs
+    if team == players[1] then
+      selector.p = p
+    end
   elseif struct_type == 2 then struct_sprite = 225 
   else struct_sprite = 226 end
 
   -- components
-  struct.animator = make_animator(struct, 0.4, struct_sprite, -32, team, {0, -3})
+  local active_animator
+  if not team then 
+    -- set palette to unowned if we have no team (5 magic number for unowned)
+    team = 5 
+    active_animator = false
+  end
+  struct.animator = make_animator(struct, 0.4, struct_sprite, -32, team, {0, -3}, nil, active_animator)
+
+  struct.update = function(self)
+    if not get_unit_at_pos(self.p) then
+      self.capture_left = 20
+    end
+  end
 
   struct.draw = function(self)
     rectfill(self.p[1], self.p[2], self.p[1] + 7, self.p[2] + 7, 3)
     self.animator:draw()
+  end
+
+  struct.capture = function(self, unit)
+    self.capture_left -= unit.hp
+    if self.capture_left <= 0 then
+      sfx(sfx_captured)
+      self.team = unit.team
+      self.animator.palette = unit.team
+      self.animator.animation_flag = true
+      self.capture_left = 20
+      if self.type == 1 then
+        -- hq captured; end game
+        load("loader.p8")
+      end
+    else
+      sfx(sfx_capturing)
+    end
+
   end
 
   return struct
@@ -1375,6 +1537,16 @@ function make_unit(unit_type_index, p, team)
     del(units, self)
   end
 
+  unit.capture = function(self)
+    for struct in all(structures) do
+      if points_equal(struct.p, self.p) then
+        struct:capture(self)
+        self.is_resting = true
+        break
+      end
+    end
+  end
+
   unit.unmove = function(self)
     -- un-does a move, moving the unit back to its start location
     self.p = self.cached_p
@@ -1424,7 +1596,7 @@ function make_unit(unit_type_index, p, team)
     if not our_life then our_life = self.hp end
     if not tile_p then tile_p = u2.p end
     local tile_defense = get_tile_info(mget(tile_p[1] / 8, tile_p[2] / 8))[2]
-    return max(0, flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 / tile_defense + rnd(1.3)))
+    return max(0, flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 * tile_defense + rnd(1)))
   end
 
   return unit
@@ -1438,7 +1610,7 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   animator.sprite = sprite
   animator.sprite_offset = sprite_offset
   animator.palette = palette
-  if animation_flag then animator.animation_flag = animation_flag else animator.animation_flag = true end
+  if animation_flag ~= nil then animator.animation_flag = animation_flag else animator.animation_flag = true end
   if draw_offset then animator.draw_offset = draw_offset else animator.draw_offset = {0, 0} end
   animator.draw_shadow = draw_shadow  -- draws a shadow on sprites if true
 
@@ -1524,6 +1696,7 @@ function load_assets()
     u.sprite = peek_increment()
     u.mobility_type = peek_increment()
     u.travel = peek_increment()
+    u.cost = peek_increment()
     u.moveout_sfx = peek_increment()
     u.combat_sfx = peek_increment()
 
@@ -1551,13 +1724,17 @@ function set_palette(palette)
     pal(8, 12)
     pal(2, 5)  
   elseif palette == palette_green then
-    pal(9, 3)
-    pal(8, 11)
+    pal(9, 11)
+    pal(8, 3)
     pal(2, 10)  
   elseif palette == palette_pink then
     pal(9, 14)
     pal(8, 2)
     pal(2, 10)
+  elseif palette == 5 then -- un-owned palette. 5 is magic number we use
+    pal(9, 13)
+    pal(8, 6)
+    pal(2, 5)
   else
     for i = 0, 15 do
       pal(i,  palette)
@@ -1799,7 +1976,7 @@ __gfx__
 0888880008888800000000000000000022222200000000000000000055555553000000003555555500f0000000000000006dd500005555000000000033b33b33
 899999808999998000998000009880002999820000000000000000002222444500000000522222220f4400f000000000065555500d7575d0000000053bbb5bb3
 8999999889999998099978000992780029927855000000000000000022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
-22222220222222200999185599921855299218510000000000000000222222440000000022222222072707220000000006dddd50d7d57d7d055d055dbb5b5bb5
+22222220222222200999185599921855299218550000000000000000222222440000000022222222072707220000000006dddd50d7d57d7d055d055dbb5b5bb5
 ffff1f00788f1f770999990099999955299999550000000000000000000002440000000022200000007f40770000000065555555ddd55ddd55dd55dd3b5bbb53
 088fff70788fff75222922202222222022222220000000000000000000000044000000002200000007244270000ff00067d7d7d5d7d57d7dd7d7d7d7bbb5bbb5
 0287777772888877282828202898989228989892000000000000000000000044000000002200000000722700000f20006dddddd5ddd55ddddddddddd33433433
@@ -1831,7 +2008,7 @@ ff1ff1f08f1f17770995990029555592295555920000000000000000000000000000000000000000
 00000000000000000000000000000000222222000000000000000000000000000000000000000000000080005ccccc6522000000000000440000000000000000
 08888800088888000099800000988000299982000000000000000000000000000000000000000000000880002ccccc22cc000000000000440000000000000000
 89999980899999800999780009927800299278550000000000000000000000000000000000000000008888882ccccc22cc000000000000cc0000000000000000
-89999998899999980999185599921855299218510000000000000000000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
+89999998899999980999185599921855299218550000000000000000000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
 222222202222222009999900999999552999995500000000000000000000000000000000000000000088888800000000cc000000000000cc0000000000000000
 ffff1f00788f1f7722292220222222202222222000000000000000000000000000000000000000000008800000000000cc000000000000cc0000000000000000
 088fff70788fff752928292029898982298989820000000000000000000000000000000000000000000080000000000022000000000000cc0000000000000000
@@ -2070,8 +2247,8 @@ __sfx__
 00030000195501f550195000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
 0002000027370193700a370003700c0500d0500e0500f050100501205014050180501a0501d05021050260502b05031050380503e050000000000000000000000000000000000000000000000000000000000000
 000300003c6603c6603c6603c6503c6503965037640366403464034640316402f6402d6302b630296302763024630216301f6301d6301b63019630186301563012630106300d6300b63009630056300363000630
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00020000114501e4502545025450224501a4500f450084501145017450204502445020450104500a450164501b45022450284502c45024450154500e450164501d4502245026450294502c4502b4502945025450
+000200000205004050080500c05012050180501e050240502a0502f050330503605038050370503705038050390503b0503d0503e0503f05032050330503505037050380503a0503b0503c0503d0503f0503f050
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

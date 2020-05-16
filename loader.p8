@@ -106,6 +106,7 @@ function make_infantry()
   unit.sprite = 16
   unit.mobility_type = mobility_infantry
   unit.travel = 4
+  unit.cost = 1
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_infantry_combat
 
@@ -130,6 +131,7 @@ function make_mech()
   unit.sprite = 17
   unit.mobility_type = mobility_mech
   unit.travel = 3
+  unit.cost = 3
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_mech_combat
 
@@ -154,6 +156,7 @@ function make_recon()
   unit.sprite = 18
   unit.mobility_type = mobility_tires
   unit.travel = 9
+  unit.cost = 4
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_recon_combat
 
@@ -182,6 +185,7 @@ function make_tank()
   unit.sprite = 19
   unit.mobility_type = mobility_treads
   unit.travel = 7
+  unit.cost = 7
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_tank_combat
 
@@ -206,6 +210,7 @@ function make_war_tank()
   unit.sprite = 20
   unit.mobility_type = mobility_treads
   unit.travel = 6
+  unit.cost = 16
   unit.moveout_sfx = sfx_war_tank_moveout
   unit.combat_sfx = sfx_war_tank_combat
 
@@ -230,6 +235,7 @@ function make_artillery()
   unit.sprite = 21
   unit.mobility_type = mobility_treads
   unit.travel = 6
+  unit.cost = 6
   unit.moveout_sfx = sfx_artillery_moveout
   unit.combat_sfx = sfx_artillery_combat
 
@@ -254,6 +260,7 @@ function make_rocket()
   unit.sprite = 22
   unit.mobility_type = mobility_tires
   unit.travel = 6
+  unit.cost = 15
   unit.moveout_sfx = sfx_rocket_moveout
   unit.combat_sfx = sfx_rocket_combat
 
@@ -308,6 +315,9 @@ function write_unit(u)
 
   -- travel
   poke_increment(u.travel)
+
+  -- build cost
+  poke_increment(u.cost)
 
   -- moveout sfx
   poke_increment(u.moveout_sfx)

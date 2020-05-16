@@ -7,27 +7,26 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* HQ
-* Cities
-  * Heal units on them by **3** per turn
-* Capturing
-* Income
 * Bases
 * Building from bases
-* Advanced AI
+* Complete AI
  * Capture cities and bases
  * Build from cities and bases
+* Long range units
+* Advanced AI
+ * Use of long range units
+ * Retreating
 * Music
-* 3 Campagn missions
+* 3 Campaign missions
 * Splash screen
 * Save/load functionality
 * Sort units by y value for drawing
+* Make end_turn a coroutine and play an animation 
 * ctrl + f for "refact" comments for refactoring suggestions
+* 8 commanders
+* more campaign missions
+* multiplayer
 
-Extras / NiceToHaves
---------------------
-
-* Camera shake during unit death and attack
 
 
 Done
@@ -42,6 +41,12 @@ Done
  * Move towards other player's hq with A*
  * Attack if there are enemy units in attack range
 * Unit lifebar
+* Capturing
+* Camera shake during unit death and attack
+* Cities
+  * Heal units on them by 2 per turn
+* Income
+* HQ
 
 Bugs-to-fix
 -----------
