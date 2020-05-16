@@ -68,7 +68,7 @@ function _init()
     make_artillery(),
     make_tank(),
     make_rocket(),
-    make_war_tank(),
+    make_war_tank()
   }
 
   -- write all data
