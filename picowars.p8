@@ -74,16 +74,6 @@ flag_base = 4
 flag_player_1_owner = 6
 flag_player_2_owner = 7
 
-
--- refac: remove these since they'll be in external.p8 now
-unit_infantry = "infantry"
-unit_mech = "mech"
-unit_recon = "recon"
-unit_tank = "tank"
-unit_artillery = "artillery"
-unit_rockets = "rockets"
-unit_war_tank = "war tank"
-
 -- table of all unit types. loaded from memory
 unit_types = {}
 
@@ -180,7 +170,7 @@ players_reversed[players[1]] = 1
 players_reversed[players[2]] = 2
 players_human = {true, false}
 players_hqs = {}  -- the hqs for the two players
-players_gold = {0, 0}
+players_gold = {15, 0}
 turn_i = 1
 function end_turn()
   sfx(sfx_end_turn)
@@ -279,10 +269,11 @@ function ai_coroutine()
         for t, units in pairs(attackables) do
           for u2 in all(units) do
             -- simulate us attacking them and them attacking back
+            -- refac: can combine damage_done and gain, and damage_loss and loss to make each one liners. 
             local damage_done = u:calculate_damage(u2)
-            gain = (damage_done - damage_done + min(0, u2.hp - damage_done)) * u2.cost
+            local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
             local damage_loss = u2:calculate_damage(u, t, u2.hp - damage_done)
-            loss = (damage_loss - damage_done + min(0, u.hp - damage_loss)) * u.cost
+            local loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
             local difference = gain - loss
             if gain >= loss and difference > best_fight_total_gain then
               best_fight_total_gain = difference
@@ -456,17 +447,6 @@ function ai_get_melee_attackables_at_pos(p)
 end
 
 -- tile utilities
-function tile_pos_to_rect(tile_coord)
-  -- given the coordinate of a tile, translate that to a rect of the tile
-  local pixel_coords = tile_to_pixel_pos(tile_coord)
-  return {x=pixel_coords[1], y=pixel_coords[2], w=8, h=8}
-end
-
-function tile_to_pixel_pos(tile_coord)
-  -- given the coordinate of a tile, translate that to pixel values
-  return {tile_coord[1]*8, tile_coord[2]*8}
-end
-
 function tile_has_flag(x, y, flag)
   local tile = mget(x, y)
   local has_flag = fget(tile, flag)
@@ -496,7 +476,7 @@ function get_selection(p, include_resting)
     return {0, unit}
   end
 
-  local tile = mget(tile_to_pixel_pos(p))
+  local tile = mget(p[1] / 8, p[2] / 8)
 
   if fget(tile, flag_structure) and fget(tile, flag_base) then
     -- selection is base
@@ -661,7 +641,9 @@ function make_selector()
   -- 1 = end turn
   selector.prompt_selected = 1
   selector.prompt_options = {}
+  selector.prompt_options_disabled = {} -- will appear marked out as disabled
 
+  -- map of selection_type -> prompt texts available
   prompt_texts = {}
   prompt_texts[2] = {}
   add(prompt_texts[2], "rest")
@@ -669,6 +651,12 @@ function make_selector()
   add(prompt_texts[2], "capture")
   prompt_texts[4] = {}
   add(prompt_texts[4], "end turn")
+  prompt_texts[8] = {}  -- unit construction prompt texts filled in programmatically
+
+  for unit_type in all(unit_types) do
+    -- fill in unit type construction prompt texts
+    add(prompt_texts[8], unit_type.cost .. "g: " .. unit_type.type)
+  end
 
   selector.prompt_texts = prompt_texts
 
@@ -764,10 +752,8 @@ function make_selector()
 
         self:stop_selecting()
 
-
-        return
-      elseif self.selection_type == 2 then
-        -- do unit selection prompt
+      elseif self.selection_type == 2 or self.selection_type == 8 then
+        -- do unit selection and base construction prompt
         self:update_prompt(arrow_val)
       elseif self.selection_type == 3 then
         -- unit attack selection
@@ -781,14 +767,15 @@ function make_selector()
 
       -- refac: set globals for button presses each turn. btnp(4) could be btnp_4
 
-      local selection
+      local selection = {}
       if btnp(4) then
         selection = get_selection(self.p)
       elseif btn(5) then
         selection = get_selection(self.p, true)
       end
 
-      if selection and selection[1] == 0 then
+      if selection[1] == 0 then
+        -- do unit selection
         self.selection = selection[2]
         if btnp(4) then
           sfx(sfx_select_unit)
@@ -813,12 +800,21 @@ function make_selector()
           self.movable_tiles = movable_tiles[1]
           self.selection_type = 5
         end
+      elseif btnp(4) and selection[1] == 1 and not get_unit_at_pos(self.p) then
+        -- do base selection
+        for struct in all(structures) do
+          if struct.team == players_turn_team and points_equal(struct.p, self.p) and struct.type == 3 then
+            self.selecting = true
+            self.selection = struct
+            self:start_build_unit_prompt()
+          end
+        end
+
       elseif btnp(4) then
+        -- do menu prompt
         self.selecting = true
         self:start_menu_prompt()
       end
-      -- return from selecting
-      return
 
     end
 
@@ -856,9 +852,6 @@ function make_selector()
             self:draw_movement_arrow()
           end
 
-        elseif self.selection_type == 2 then
-          -- draw rest/attack/capture unit prompt
-          self:draw_prompt()
         elseif self.selection_type == 3 then
           -- draw attack prompt
           for unit in all(self.attack_targets) do
@@ -867,7 +860,8 @@ function make_selector()
             pal(7, 7)
           end
 
-        elseif self.selection_type == 4 then
+        elseif self.selection_type == 2 or self.selection_type == 4 or self.selection_type == 8 then
+          -- draw rest/attack/capture unit prompt, menu prompt, and unit construction prompts
           self:draw_prompt()
 
         elseif self.selection_type == 7 then
@@ -880,8 +874,8 @@ function make_selector()
 
       end
       
-      if self.selection_type ~= 7 then
-        -- draw cursor if we're not fighting
+      if self.selection_type ~= 7 and self.selection_type ~= 8 then
+        -- draw cursor if we're not fighting and we're not building units
         self.animator:draw()
 
         -- draw pointer bounce offset by animator
@@ -925,7 +919,9 @@ function make_selector()
         local type_to_sprite_map = {28, 29, 30}
         tile = type_to_sprite_map[struct_type]
         rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
-        print(struct.capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
+        local capture_left = struct.capture_left
+        if struct.capture_left < 10 then capture_left = "0" .. struct.capture_left end
+        print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
         break
       end
     end
@@ -941,6 +937,9 @@ function make_selector()
     self.selection_type = nil
     self.movable_tiles = {}
     self.arrowed_tiles = {}
+    self.prompt_options = {}
+    self.prompt_options_disabled = {}
+    self.prompt_title = nil
   end 
 
   selector.start_unit_prompt = function(self)
@@ -965,9 +964,24 @@ function make_selector()
       end
     end
 
-    -- todo: add ability for capturing structures here
-
     self.prompt_selected = #self.prompt_options
+  end
+
+  selector.start_build_unit_prompt = function(self)
+    self.selection_type = 8
+
+    self.prompt_options = {}
+    self.prompt_title = "total gold: " .. players_gold[players_turn]
+
+    for i, unit_type in pairs(unit_types) do
+      if players_gold[players_turn] >= unit_type.cost then
+        add(self.prompt_options, unit_type.index)
+      else
+        add(self.prompt_options_disabled, unit_type.index)
+      end
+    end
+
+    self.prompt_selected = 1
   end
 
   selector.start_menu_prompt = function(self)
@@ -993,23 +1007,32 @@ function make_selector()
 
   selector.draw_prompt = function(self)
     local y_offset = 15
+    if self.selection_type == 8 then y_offset = -25 end
     local prompt_text
     for i, prompt in pairs(self.prompt_options) do
-      local palette
+      local bg_color = 6
       prompt_text = self.prompt_texts[self.selection_type][prompt]
       if i == self.prompt_selected then 
-        palette = palette_pink 
+        bg_color = 14
         prompt_text ..= "!"
       end
 
-      draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, palette, palette == palette_pink)
+      draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, bg_color, bg_color == 14)
       y_offset += 9
+    end
+    for disabled_prompt in all(self.prompt_options_disabled) do
+      prompt_text = self.prompt_texts[self.selection_type][disabled_prompt]
+      draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, 8)
+      y_offset += 9
+    end
+    if self.prompt_title then
+      draw_msg({self.p[1], self.p[2] - y_offset}, self.prompt_title, 10)
     end
   end
 
   selector.update_prompt = function(self, change_val)
     if not change_val then return end
-    -- players_turn = players_turn % 2 + 1
+
     self.prompt_selected = (self.prompt_selected + change_val) % #self.prompt_options
     if self.prompt_selected < 1 then self.prompt_selected = #self.prompt_options end
     if #self.prompt_options > 1 then
@@ -1410,7 +1433,7 @@ function make_unit(unit_type_index, p, team)
   unit.get_movable_tiles = function(self, travel_offset, add_enemy_units_to_return)
     -- returns two tables
     -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
-    -- the second table the rest of the tiles they could move to if their own units weren't occupying them. 
+    -- the second table is the rest of the tiles they could move to if their own units weren't occupying them. 
 
     -- travel_offset increases the distance of the search by one. you can determine areas of attack of setting this to 1
     -- if we want to see the enemy units we can attack, we should also set `add_enemy_units_to_return` to true. 
@@ -1596,7 +1619,7 @@ function make_unit(unit_type_index, p, team)
     if not our_life then our_life = self.hp end
     if not tile_p then tile_p = u2.p end
     local tile_defense = get_tile_info(mget(tile_p[1] / 8, tile_p[2] / 8))[2]
-    return max(0, flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 * tile_defense + rnd(1)))
+    return flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 * tile_defense + rnd(1))
   end
 
   return unit
@@ -1681,6 +1704,7 @@ function load_string(n)
     local charcode_val = chr(peek_increment())
     str ..= charcode_val
   end
+  -- i don't know what this returns, but it's not a string. that's fine. it works. 
   return str
 end
 
@@ -1837,26 +1861,12 @@ function zspr(sprite, w, h, dx, dy, dz, flip_sprite)
   sspr(8 * (sprite % 16), 8 * flr(sprite / 16), sw, sh, dx, dy, sw * dz - magic_fucking_number, sh * dz - magic_fucking_number, flip_sprite)
 end
 
-draw_msg = function(center_pos, msg, palette, draw_bar)
+function draw_msg(center_pos, msg, bg_color, draw_bar)
   msg_length = #msg
 
   local padding = 2
   local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
   local y_pos = center_pos[2]
-  local bg_color = 6
-
-  -- grey is default 
-  if (palette) then
-    if palette == palette_orange then
-      bg_color = 9
-    elseif palette == palette_green then
-      bg_color = 3  -- dark green
-    elseif palette == palette_blue then
-      bg_color = 12
-    elseif palette == palette_pink then
-      bg_color = 14
-    end
-  end
 
   -- draw message background rectangle
   rectfill(
