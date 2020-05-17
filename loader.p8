@@ -107,6 +107,8 @@ function make_infantry()
   unit.mobility_type = mobility_infantry
   unit.travel = 4
   unit.cost = 1
+  unit.range_min = 0
+  unit.range_max = 0
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_infantry_combat
 
@@ -132,6 +134,8 @@ function make_mech()
   unit.mobility_type = mobility_mech
   unit.travel = 3
   unit.cost = 3
+  unit.range_min = 0
+  unit.range_max = 0
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_mech_combat
 
@@ -157,6 +161,8 @@ function make_recon()
   unit.mobility_type = mobility_tires
   unit.travel = 9
   unit.cost = 4
+  unit.range_min = 0
+  unit.range_max = 0
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_recon_combat
 
@@ -186,17 +192,19 @@ function make_artillery()
   unit.mobility_type = mobility_treads
   unit.travel = 6
   unit.cost = 6
-  unit.moveout_sfx = sfx_artillery_moveout
+  unit.range_min = 2
+  unit.range_max = 3
+  unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_artillery_combat
 
   dc = {}
-  dc[unit_index_infantry] = 0.9
-  dc[unit_index_mech] = 0.85
-  dc[unit_index_recon] = 0.8
-  dc[unit_index_artillery] = 0.75
-  dc[unit_index_tank] = 0.7
-  dc[unit_index_rocket] = 0.8
-  dc[unit_index_war_tank] = 0.45
+  dc[unit_index_infantry] = 9
+  dc[unit_index_mech] = 8.5
+  dc[unit_index_recon] = 8
+  dc[unit_index_artillery] = 7.5
+  dc[unit_index_tank] = 7
+  dc[unit_index_rocket] = 8
+  dc[unit_index_war_tank] = 4.5
   unit.damage_chart = dc
 
   return unit
@@ -211,6 +219,8 @@ function make_tank()
   unit.mobility_type = mobility_treads
   unit.travel = 7
   unit.cost = 7
+  unit.range_min = 0
+  unit.range_max = 0
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_tank_combat
 
@@ -236,17 +246,19 @@ function make_rocket()
   unit.mobility_type = mobility_tires
   unit.travel = 6
   unit.cost = 15
-  unit.moveout_sfx = sfx_rocket_moveout
+  unit.range_min = 3
+  unit.range_max = 5
+  unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_rocket_combat
 
   dc = {}
-  dc[unit_index_infantry] = 0.95
-  dc[unit_index_mech] = 0.9
-  dc[unit_index_recon] = 0.9
-  dc[unit_index_artillery] = 0.8
-  dc[unit_index_tank] = 0.85
-  dc[unit_index_rocket] = 0.85
-  dc[unit_index_war_tank] = 0.55
+  dc[unit_index_infantry] = 9.5
+  dc[unit_index_mech] = 9
+  dc[unit_index_recon] = 9
+  dc[unit_index_artillery] = 8
+  dc[unit_index_tank] = 8.5
+  dc[unit_index_rocket] = 8.5
+  dc[unit_index_war_tank] = 5.5
   unit.damage_chart = dc
 
   return unit
@@ -261,6 +273,8 @@ function make_war_tank()
   unit.mobility_type = mobility_treads
   unit.travel = 6
   unit.cost = 16
+  unit.range_min = 0
+  unit.range_max = 0
   unit.moveout_sfx = sfx_war_tank_moveout
   unit.combat_sfx = sfx_war_tank_combat
 
@@ -301,28 +315,15 @@ end
 function write_unit(u)
   -- writes a unit to memory
 
-  -- unit index
   poke_increment(u.index)
-
-  -- type
   write_string(u.type, 10)
-
-  -- sprite
   poke_increment(u.sprite)
-
-  -- mobility type
   poke_increment(u.mobility_type)
-
-  -- travel
   poke_increment(u.travel)
-
-  -- build cost
   poke_increment(u.cost)
-
-  -- moveout sfx
+  poke_increment(u.range_min)
+  poke_increment(u.range_max)
   poke_increment(u.moveout_sfx)
-  
-  -- combat sfx
   poke_increment(u.combat_sfx)
 
   -- damage chart

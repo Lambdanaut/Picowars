@@ -11,7 +11,7 @@ __lua__
 version = "0.1"
 -- refac: delete lots of locals and check for bugs
 
-debug = true
+-- debug = true
 
 
 -- palettes
@@ -33,6 +33,7 @@ co_icon[palette_green] = 234
 co_icon[palette_pink] = 232
 
 -- sfx
+-- refac: unit sounds changed to magic numbers
 sfx_selector_move = 0
 sfx_unit_rest = 1
 sfx_select_unit = 2
@@ -45,15 +46,6 @@ sfx_unit_death = 8
 sfx_capturing = 9
 sfx_captured = 10
 sfx_build_unit = 11
-sfx_infantry_moveout = 14  -- refac: unit sounds changed to magic numbers
-sfx_tank_moveout = 15
-sfx_recon_moveout = 16
-sfx_infantry_combat = 22
-sfx_mech_combat = 23
-sfx_recon_combat = 24
-sfx_tank_combat = 25
-
--- unit_types
 
 -- musics
 music_bitmask = 3
@@ -64,7 +56,7 @@ flag_road = 1
 flag_river = 2
 flag_forest = 3
 flag_mountain = 4
-flag_ocean = 5
+flag_cliff = 5
 flag_plain = 6
 
 flag_structure = 1  -- required for structure
@@ -112,6 +104,7 @@ function _init()
   make_cam()
   make_units()
 
+  end_turn()
 
   -- update the global players_turn_team to be the palette of the players turn
   players_turn_team = players[players_turn]
@@ -144,17 +137,18 @@ function _draw()
   for structure in all(structures) do
     structure:draw()
   end
-  
-  for unit in all(units) do
-    unit:draw()
-  end
 
   -- draw tips of hqs
   for i = 1, 2 do
     local hq = players_hqs[i]
     set_palette(hq.team)
     spr(208, hq.p[1], hq.p[2] - 11) -- draw the spire of an hq
-    reset_palette()
+    pal()
+  end
+  
+  sort_table_by_y(units)
+  for unit in all(units) do
+    unit:draw()
   end
 
   -- do ai_update in draw section for debug purposes
@@ -164,14 +158,14 @@ function _draw()
 end
 
 -- lvl manager code
-players_turn = 1
+players_turn = 0
 players = {palette_orange, palette_green}
 players_reversed = {}  -- reverse index for getting player index by team
 players_reversed[players[1]] = 1
 players_reversed[players[2]] = 2
 players_human = {true, false}
 players_hqs = {}  -- the hqs for the two players
-players_gold = {15, 0}
+players_gold = {0, 0}
 turn_i = 1
 function end_turn()
   sfx(sfx_end_turn)
@@ -216,20 +210,22 @@ function ai_update()
     end
   end
   -- sort units based on infantry/mech type
+  ai_units_ranged = {}
   ai_units_infantry = {}
-  ai_units_non_infantry = {}
+  other_ai_units = {}
   for u in all(ai_units) do
-    if u.mobility_type == 0 then
+    if u.ranged then
+      add(ai_units_ranged, u)
+    elseif u.mobility_type == 0 then
       add(ai_units_infantry, u)
     else
-      add(ai_units_non_infantry, u)
+      add(other_ai_units, u)
     end
   end
-  ai_units = ai_units_infantry
-  merge_tables(ai_units, ai_units_non_infantry)
-
-  -- get enemy hq location
-  -- ai_enemy_hq_p = {8, 32}
+  ai_units = {}
+  merge_tables(ai_units, ai_units_ranged)  -- move ranged first
+  merge_tables(ai_units, ai_units_infantry)  -- then infantry
+  merge_tables(ai_units, other_ai_units)  -- then other units
 
   -- run primary coroutine thread
   if not active_ai_coroutine then
@@ -245,6 +241,7 @@ end
 function ai_coroutine()
   printh("starting ai_coroutine\n---------------------")
   -- 3 waves of passing through our units
+
   for i = 1, 2 do
     for u in all(ai_units) do 
       if not u.is_resting then
@@ -252,91 +249,147 @@ function ai_coroutine()
         local unit_movable_tiles = u:get_movable_tiles()[1]
         add(unit_movable_tiles, u.p)
 
+        local has_attacked
+
         -- determine if there are any good fights to have within our range
+        if u.ranged then
+          -- ranged attack
+          local ranged_targets = u:targets()
 
-        -- get the positions we can attack enemies from
-        -- map of tile_p => attackable enemy unit from that position 
-        local attackables = {}
-        for t in all(unit_movable_tiles) do
-          attackables[t] = ai_get_melee_attackables_at_pos(t)
-        end
+          if #ranged_targets > 0 then
+            local best_target_u
+            local best_target_value = -32767  -- start at negative infinity
+            for u2 in all(ranged_targets) do
+              local attack_value = ai_calculate_attack_value(u, u2)
+              if attack_value > best_target_value then
+                best_target_value = difference
+                best_target_u = u2
+              end
+            end
 
-        -- determine best fight to take
-        local in_danger
-        local best_fight_u
-        local best_fight_pos
-        local best_fight_total_gain = -32767  -- start at negative infinity
-
-        for t, units in pairs(attackables) do
-          for u2 in all(units) do
-            -- simulate us attacking them and them attacking back
-            -- refac: can combine damage_done and gain, and damage_loss and loss to make each one liners. 
-            local damage_done = u:calculate_damage(u2)
-            local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
-            local damage_loss = u2:calculate_damage(u, t, u2.hp - damage_done)
-            local loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
-            local difference = gain - loss
-            if gain >= loss and difference > best_fight_total_gain then
-              best_fight_total_gain = difference
-              best_fight_u = u2
-              best_fight_pos = t
-            elseif difference < 15 then
-              -- todo add in danger code
-              -- in_danger = true
+            if best_target_u then
+              attack_coroutine_u1 = u
+              attack_coroutine_u2 = best_target_u
+              attack_coroutine()
+              has_attacked = true
             end
           end
-        end
+        else
+          -- melee attacks
+          local attackables = {}
 
-        -- pathfind to enemy hq by default
-        local goal = players_hqs[1].p
+          -- get the positions we can attack enemies from
+          -- map of tile_p => attackable enemy unit from that position 
+          for t in all(unit_movable_tiles) do
+            attackables[t] = u:targets(t)
+          end
 
-        if in_danger then
-          -- retreat
-          goal = players_hqs[2].p
+          -- determine best fight to take
+          local best_fight_u
+          local best_fight_pos
+          local best_fight_value = -32767  -- start at negative infinity
 
-        elseif best_fight_pos then
-          ai_move(u, best_fight_pos)
-
-          -- do attack
-          attack_coroutine_u1 = u
-          attack_coroutine_u2 = best_fight_u
-          attack_coroutine()
-          break  -- end ai for this unit
-        end
-
-
-        if ai_pathfinding_h(goal, u.p) < 5 and u.index > 2 then
-          -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
-          goal = players_hqs[2].p
-        elseif u.index < 3 then
-          -- if we're an infantry or mech, navigate to nearest capturable structure
-          local nearest_struct
-          local nearest_struct_d = 32767
-          for struct in all(structures) do
-            local d = ai_pathfinding_h(u.p, struct.p)
-            if struct.team ~= players_turn_team and d < nearest_struct_d then
-              nearest_struct = struct
-              nearest_struct_d = d
+          for t, attackable_unit in pairs(attackables) do
+            for u2 in all(attackable_unit) do
+              -- simulate us attacking them and them attacking back
+              local attack_value = ai_calculate_attack_value(u, u2, t)
+              if attack_value >= 0 and attack_value > best_fight_value then
+                best_fight_value = difference
+                best_fight_u = u2
+                best_fight_pos = t
+              end
             end
           end
-          goal = nearest_struct.p
-        end
 
-        local path = ai_pathfinding(u, goal, true)
-        local path_movable = {}
-        for t in all(path) do
-          if point_in_table(t, unit_movable_tiles) then
-            add(path_movable, t)
+          if best_fight_pos then
+            -- do melee attack
+            ai_move(u, best_fight_pos)
+
+            attack_coroutine_u1 = u
+            attack_coroutine_u2 = best_fight_u
+            attack_coroutine()
+            has_attacked = true
           end
         end
 
-        -- find point in path that is closest to enemy's hq
-        local p = point_closest_to_p(path_movable, goal)
-        ai_move(u, p)
+        if not has_attacked then
+          -- pathfind to enemy hq by default
+          local goal = players_hqs[3 - players_turn].p
+
+          if ai_pathfinding_h(goal, u.p) < 5 and u.index > 2 then
+            -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
+            goal = players_hqs[players_turn].p
+          elseif u.index < 3 then
+            -- if we're an infantry or mech, navigate to nearest capturable structure
+            local nearest_struct
+            local nearest_struct_d = 32767
+            for struct in all(structures) do
+              local d = ai_pathfinding_h(u.p, struct.p)
+              local unit_at_struct = get_unit_at_pos(struct.p)
+              if struct.team ~= players_turn_team and d < nearest_struct_d and 
+                  (not unit_at_struct or unit_at_struct.id == u.id or unit_at_struct.team ~= players_turn_team) then
+                nearest_struct = struct
+                nearest_struct_d = d
+              end
+            end
+            goal = nearest_struct.p
+          end
+
+          local path = ai_pathfinding(u, goal, true)
+          local path_movable = {}
+          for t in all(path) do
+            if point_in_table(t, unit_movable_tiles) then
+              add(path_movable, t)
+            end
+          end
+
+          -- find point in path that is closest to enemy's hq
+          local p = point_closest_to_p(path_movable, goal)
+          ai_move(u, p)
+        end
 
       end
     end
   end
+
+  -- build units
+
+  for struct in all(structures) do
+    if struct.type == 3 and struct.team == players_turn_team and not get_unit_at_pos(struct.p) then
+      -- build unit for each of our bases
+
+      -- get unit counts
+      -- artificially add 1 to counts to stop division by 0 errors
+      local infantry_count = 1
+      local mech_count = 1
+      local unit_count = 1
+      for u in all(units) do
+        if u.team == players_turn_team then
+          if u.index == 1 then
+            infantry_count += 1
+          elseif u.index == 2 then
+            mech_count += 1
+          end
+          unit_count += 1
+        end
+      end
+
+      if infantry_count / unit_count < 0.3 then
+        struct:build(1)
+      elseif mech_count / unit_count < 0.2 then
+        struct:build(2)
+      else
+        for i = #unit_types, 3, -1 do
+          -- count backwards from the most expensive non-infantry/mech unit types 
+          -- build the first one we have the money for
+          if unit_types[i].cost <= players_gold[players_turn] then
+            struct:build(i)
+          end
+        end
+      end
+    end
+  end
+
   end_turn()
 
 end
@@ -436,15 +489,19 @@ function ai_pathfinding_h(p, target)
   return abs(p[1] - target[1]) / 8 + abs(p[2] - target[2]) / 8
 end
 
-function ai_get_melee_attackables_at_pos(p)
-  local attackables = {}
-  for t in all(get_tile_adjacents(p)) do
-    local u = get_unit_at_pos(t)
-    if u and u.team ~= players_turn_team then
-      add(attackables, u)
-    end
+function ai_calculate_attack_value(u, u2, tile)
+  -- returns the estimated value of an attack as the difference between the gain and loss
+  -- tile is the tile we expect to attack from if we're melee
+  local damage_done = u:calculate_damage(u2)
+  local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
+  local loss
+  if u.ranged then
+    loss = 0
+  else
+    local damage_loss = u2:calculate_damage(u, true, tile, u2.hp - damage_done)
+    loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
   end
-  return attackables
+  return gain - loss
 end
 
 -- tile utilities
@@ -503,7 +560,7 @@ function get_tile_info(tile)
     elseif fget(tile, flag_forest) then return {"wood★★", 0.6}
     elseif fget(tile, flag_mountain) then return {"mntn★★★★", 0.25}
     elseif fget(tile, flag_river) then return {"river", 1.0}
-    elseif fget(tile, flag_ocean) then return {"ocean", 1.0}
+    elseif fget(tile, flag_cliff) then return {"cliff", 1.0}
     end
   end
   return {"unmovable", 0} -- no info
@@ -528,6 +585,7 @@ attack_coroutine = function()
   currently_attacking = true
 
   -- do attack
+  selector.p = {attack_coroutine_u2.p[1], attack_coroutine_u2.p[2]}
   attack_timer = 0
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
   attack_coroutine_u2.hp = max(0, attack_coroutine_u2.hp - damage_done)
@@ -537,7 +595,8 @@ attack_coroutine = function()
     yield()
   end
   -- do response attack
-  if attack_coroutine_u2.hp > 0 then
+  if attack_coroutine_u2.hp > 0 and not attack_coroutine_u1.ranged and not attack_coroutine_u2.ranged then
+    selector.p = {attack_coroutine_u1.p[1], attack_coroutine_u1.p[2]}
     attack_timer = 0
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
     attack_coroutine_u1.hp = max(0, attack_coroutine_u1.hp - damage_done)
@@ -793,15 +852,17 @@ function make_selector()
             self.arrowed_tiles = {self.selection.p}
           else
             -- start enemy unit selection
-            local movable_tiles = self.selection:get_movable_tiles()
-            self.movable_tiles = movable_tiles[1]
+            self.movable_tiles = self.selection:get_movable_tiles()[1]
             self.selection_type = 6
           end
         elseif btnp(5) then
           sfx(sfx_select_unit)
           self.selecting = true
-          local movable_tiles = self.selection:get_movable_tiles(1, true)
-          self.movable_tiles = movable_tiles[1]
+          if self.selection.ranged then
+            self.movable_tiles = self.selection:ranged_attack_tiles()
+          else
+            self.movable_tiles = self.selection:get_movable_tiles(1, true)[1]
+          end
           self.selection_type = 5
         end
       elseif btnp(4) and selection[1] == 1 and not get_unit_at_pos(self.p) then
@@ -826,6 +887,7 @@ function make_selector()
 
   selector.draw = function(self)
     -- only draw the selector if it's a human's turn
+    local draw_prompt  -- boolean flag for if we should draw the prompt
     if players_human[players_turn] then 
       if self.selecting then
         -- draw unit selection ui
@@ -842,6 +904,7 @@ function make_selector()
             else
 
               if self.selection_type == 5 then
+                -- draw in red if we're in unit attack range selection
                 pal(7, 8)
               end
               spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
@@ -866,8 +929,7 @@ function make_selector()
 
         elseif self.selection_type == 2 or self.selection_type == 4 or self.selection_type == 8 then
           -- draw rest/attack/capture unit prompt, menu prompt, and unit construction prompts
-          self:draw_prompt()
-
+          draw_prompt = true
         elseif self.selection_type == 7 then
           if costatus(active_attack_coroutine) == 'dead' then
             self:stop_selecting()
@@ -894,7 +956,7 @@ function make_selector()
           set_palette(u.team)
           rectfill(u.p[1] + 1, u.p[2], u.p[1] + 5, u.p[2] + 6, 8)
           print(u.hp, u.p[1] + 2, u.p[2] + 1, 0)
-          reset_palette()
+          pal()
         end
       end
     end
@@ -906,17 +968,22 @@ function make_selector()
     set_palette(players_turn_team)
     local x_corner = cam.p[1]
     local y_corner = cam.p[2]
+    local gold = players_gold[players_turn]
+    if gold < 10 then gold = "0" .. gold end
     rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
     rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0)  -- portrait border
     rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0)  -- team icon border
     line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2)  -- background
-    reset_palette(players_turn_team)
+    rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2)  -- player's gold border
+    rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8) -- players' gold background
+    print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- player's gold
+    pal()
     print(players_turn_team, x_corner + 29, y_corner + 3, 0) -- team name
     print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
     spr(co_icon[players_turn_team], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
     spr(palette_icon[players_turn_team], x_corner + 19, y_corner + 2, 1, 1)  -- icon
 
-    -- draw tile sprite
+    -- draw structure capture leftover
     for struct in all(structures) do
       if points_equal(struct.p, self.p) then
         -- change sprite to uncaptured structure so we don't draw their colors wrong
@@ -931,7 +998,11 @@ function make_selector()
     end
     spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
 
-    local selection = get_selection(self.p)
+    if draw_prompt then
+      -- draw the prompt if the above flag was set
+      -- we draw it last so other things don't get drawn over it
+      self:draw_prompt()
+    end
 
   end
 
@@ -953,7 +1024,7 @@ function make_selector()
 
     -- store the attack targets
     self.attack_targets = self.selection:targets()
-    if #self.attack_targets > 0 then 
+    if #self.attack_targets > 0 and (not self.selection.ranged or not self.selection.has_moved) then 
       -- add attack to the prompt if we have targets
       add(self.prompt_options, 2)
     end
@@ -1287,7 +1358,7 @@ function make_war_map(r)
     -- fill background with blue water
     map(0, 0, 0, 0, 18, 18)
 
-    -- reset_palette()
+    -- pal()
   end
 
   war_map.load = function(self)
@@ -1370,8 +1441,10 @@ function make_structure(struct_type, p, team)
   struct.build = function(self, unit_type_index)
     sfx(sfx_build_unit)
     local new_unit = make_unit(unit_type_index, {self.p[1], self.p[2]}, players[players_turn])
+    players_gold[players_turn] -= new_unit.cost
     new_unit.is_resting = true
     add(units, new_unit)
+    selector.p = {self.p[1], self.p[2]}
   end
 
   return struct
@@ -1386,7 +1459,7 @@ function make_units()
   units[3] = make_unit(7, {24, 40})
   units[4] = make_unit(1, {64, 32}, palette_green)
   units[5] = make_unit(3, {64, 40}, palette_green)
-  units[6] = make_unit(5, {64, 48}, palette_green)
+  units[6] = make_unit(6, {64, 48}, palette_green)
 end
 
 function make_unit(unit_type_index, p, team)
@@ -1512,6 +1585,8 @@ function make_unit(unit_type_index, p, team)
     self.movement_points = points
     self.animator.fps = 0.1
 
+    self.has_moved = #points > 1
+
     sfx(self.moveout_sfx)
   end
 
@@ -1591,6 +1666,7 @@ function make_unit(unit_type_index, p, team)
     self.animator.fps = self.cached_animator_fps
     self.animator.flip_sprite = false
     self.is_moving = false
+    self.has_moved = false
     self.movement_i = 1
     self.movement_points = {}
   end
@@ -1616,18 +1692,42 @@ function make_unit(unit_type_index, p, team)
     return 255 -- unwalkable if all other options are exhausted
   end
 
-  unit.targets = function(self)
+  unit.ranged_attack_tiles = function(self, p)
+    local tiles = {}
+    if not p then p = self.p end
+    for t_y = -self.range_max * 8, self.range_max * 8, 8 do
+      for t_x = -self.range_max * 8, self.range_max * 8, 8 do
+        local d = ai_pathfinding_h({p[1] + t_x, p[2] + t_y}, p)
+        if d >= self.range_min and d <= self.range_max then
+          add(tiles, {p[1] + t_x, p[2] + t_y})
+        end
+      end
+    end
+    return tiles
+  end
+
+  unit.targets = function(self, p)
     local targets = {}
-    for t in all(get_tile_adjacents(self.p)) do
+    local tiles
+    if not p then p = self.p end
+    if self.ranged then
+      tiles = self:ranged_attack_tiles(p)
+    else
+      tiles = get_tile_adjacents(p)
+    end
+    for t in all(tiles) do
       local u = get_unit_at_pos(t)
-      if u and u.team != self.team then add(targets, u) end
+      if u and u.team ~= self.team then
+        add(targets, u) 
+      end
     end
     return targets
   end
 
-  unit.calculate_damage = function(self, u2, tile_p, our_life)
+  unit.calculate_damage = function(self, u2, return_strike, tile_p, our_life)
     if not our_life then our_life = self.hp end
     if not tile_p then tile_p = u2.p end
+    if return_strike and self.ranged then return 0 end
     local tile_defense = get_tile_info(mget(tile_p[1] / 8, tile_p[2] / 8))[2]
     return flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 * tile_defense + rnd(1))
   end
@@ -1659,31 +1759,29 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
       self.time_since_last_frame = 0
     end
 
-    -- draw shadow
     local animation_frame = self:get_animation_frame()
-    if self.draw_shadow then
-      self:draw_outline(animation_frame)
-    end
+
 
     -- draw sprite
     if(self.palette) then
       set_palette(self.palette)
     end
 
-    spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1.0, 1.0, self.flip_sprite)
+    if self.draw_shadow then
+      -- draw shadow
+      outline_sprite(animation_frame, 0, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
+    else
+      -- draw sprite normally
+      spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1, 1, self.flip_sprite)
+    end
 
     if(self.palette) then
-      reset_palette()
+      pal()
     end
 
   end
 
   animator.draw_outline = function(self, animation_frame)
-    set_palette(0)
-    local offset = -1 
-    -- this is black magic. don't smell it don't touch it don't even look at it the wrong way
-    zspr(animation_frame, 1, 1, self.parent.p[1] + self.draw_offset[1] + offset, self.parent.p[2] + self.draw_offset[2] + offset, 1.35, self.flip_sprite)
-    reset_palette()
   end
 
   animator.get_animation_frame = function(self)
@@ -1731,6 +1829,9 @@ function load_assets()
     u.mobility_type = peek_increment()
     u.travel = peek_increment()
     u.cost = peek_increment()
+    u.range_min = peek_increment()
+    u.range_max = peek_increment()
+    if u.range_min > 0 then u.ranged = true end  -- add helper variable to determine if unit is ranged
     u.moveout_sfx = peek_increment()
     u.combat_sfx = peek_increment()
 
@@ -1776,12 +1877,6 @@ function set_palette(palette)
   end
 end
 
-function reset_palette()
-  for i = 0, 15 do
-    pal(i,  i)
-  end
-end
-
 -- vector functions
 function points_equal(p1, p2)
   return p1[1] == p2[1] and p1[2] == p2[2]
@@ -1799,6 +1894,15 @@ function point_in_rect(p, r)
 end
 
 -- table functions
+function sort_table_by_y(a)
+  for i=1,#a do
+    local j = i
+      while j > 1 and a[j-1].p[2] > a[j].p[2] do
+        a[j],a[j-1] = a[j-1],a[j]
+        j = j - 1
+      end
+  end
+end
 
 function point_in_table(p, t, keys)
   -- returns the index of the first point that matches if it is in the table
@@ -1854,21 +1958,23 @@ function remove(list, pos)
   end
 end
 
-
-function zspr(sprite, w, h, dx, dy, dz, flip_sprite)
-  --sprite: standard sprite number
-  --w: number of sprite blocks wide to grab
-  --h: number of sprite blocks high to grab
-  --dx: destination x coordinate
-  --dy: destination y coordinate
-  --dz: destination scale/zoom factor 
-
-  -- i have no idea why this works but it does. found by randomly messing with stuff
-  local magic_fucking_number = 0.8
-
-  local sw = 8 * w
-  local sh = 8 * h
-  sspr(8 * (sprite % 16), 8 * flr(sprite / 16), sw, sh, dx, dy, sw * dz - magic_fucking_number, sh * dz - magic_fucking_number, flip_sprite)
+function outline_sprite(n,col_outline,x,y,flip_x,sprite_palette)
+  -- reset palette to black
+  for c=1,15 do
+    pal(c,col_outline)
+  end
+  -- draw outline
+  for xx=-1,1 do
+    for yy=-1,1 do
+      spr(n,x+xx,y+yy,1,1,flip_x,flip_y)
+    end
+  end
+  -- reset palette
+  pal()
+  -- draw final sprite
+  set_palette(sprite_palette)
+  spr(n,x,y,1,1,flip_x,flip_y) 
+  pal()
 end
 
 function draw_msg(center_pos, msg, bg_color, draw_bar)
@@ -1993,62 +2099,62 @@ __gfx__
 0000000007000070000056500070007007070707000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
 7000000707700770000005500707070700700070000000000000000000000444000000002220000000000000000000000ddddd50000000006667666666666666
 7700007700000000000000000070007007070707000000000000000044444443444444443244444400000000000000000d55555000000000666766635c5c5c66
-0888880008888800000000000000000022222200000000000000000055555553000000003555555500f0000000000000006dd500005555000000000033b33b33
-899999808999998000998000009880002999820000000000000000002222444500000000522222220f4400f000000000065555500d7575d0000000053bbb5bb3
-8999999889999998099978000992780029927855000000000000000022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
-22222220222222200999185599921855299218550000000000000000222222440000000022222222072707220000000006dddd50d7d57d7d055d055dbb5b5bb5
-ffff1f00788f1f770999990099999955299999550000000000000000000002440000000022200000007f40770000000065555555ddd55ddd55dd55dd3b5bbb53
-088fff70788fff75222922202222222022222220000000000000000000000044000000002200000007244270000ff00067d7d7d5d7d57d7dd7d7d7d7bbb5bbb5
-0287777772888877282828202898989228989892000000000000000000000044000000002200000000722700000f20006dddddd5ddd55ddddddddddd33433433
-080080000200200022202220022222200222222000000000000000000000004400000004220000000007700000f4220067d7d7d5ddd55dddd7d7d7d733333333
-08888800008888800000000000000000002222000000000000000000000000440000000022000000333ff3333f42423333666666666666666666633300000000
-8999998068999998000000000000000002999920000000000000000000000044000000002200000033f442333f24423336666666666666666666663300000000
-8888888889999999009990000099990002999920000000000000000000000044000000002200000033f442333f42423366666666666666666666666300000000
-f22222f08888888809999900099999900299992000000000000000000000004400000000220000003f4442233f42422366666677667766776676666300000000
-088888707772222009999900299999922299992200000000000000000000004400000000220000003f4424233f44242366666666666666666667666300000000
-088888707678888828999820829999288299992800000000000000000000004400000000220000003f4244233f42442366676666666666666666666300000000
-02222200666288208299928028299282282992820000000000000000000000440000000022000000b4b4b24bb4b4b24b66676666666666666667666300000000
-080000000020000028202820828998288282282800000000000000000000004440000000220000003bbbbbb33bbbbbb366666663333333336667666300000000
-08888800088888770000000000000000022222200000000000000000000000445555555522000000000000003333333366666663333333336666666366666663
-89999980899999870088800000888800298998920000000000000000000000442222222222000000000000003333333366666666666666666666666366666663
-89999998899999980878780008788780297887920000000000000000000000422222222222000000000000003333333366676666666666666667666366676663
-22222220222222260918190008199180291881920000000000000000000000022222222220000000000000003333333366676666666666666667666366676663
-ff1ff1f08f1f17770995990029555592295555920000000000000000000000000000000000000000000000003333333366667677667766776676666366666663
-0fffff7008fff7572895982082555528825115280000000000000000000000000000000000000000000000003333333366666666666666666666666366666663
-02877777028886668299928028299282285555820000000000000000000000000000000000000000000000003333333336666666666666666666663366676663
-08000000020000002820282082899828828998280000000000000000000000000000000000000000000000003333333333666666666666666666633366676663
+0888880008888800000000000000000022222200000210000222282855555553000000003555555500f0000000000000006dd500005555000000000033b33b33
+899999808999998000998000009880002999820000222000222222202222444500000000522222220f4400f000000000065555500d7575d0000000053bbb5bb3
+8999999889999998099978000992780029927855022200002222200022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
+22222220222222200999185599921855299218552220287022299870222222440000000022222222072707220000000006dddd50d7d57d7d055d055dbb5b5bb5
+ffff1f00788f1f770999990099999955299999552280281829999818000002440000000022200000007f40770000000065555555ddd55ddd55dd55dd3b5bbb53
+088fff70788fff75222922202222222022222220222222222229222800000044000000002200000007244270000ff00067d7d7d5d7d57d7dd7d7d7d7bbb5bbb5
+0287777772888877282828202898989228989892289898922828282000000044000000002200000000722700000f20006dddddd5ddd55ddddddddddd33433433
+080080000200200022202220022222200222222002222220222022200000004400000004220000000007700000f4220067d7d7d5ddd55dddd7d7d7d733333333
+08888800008888800000000000000000002222000001000000222200000000440000000022000000333ff3333f42423333666666666666666666633300000000
+8999998068999998000000000000000002999920002220000222222000000044000000002200000033f442333f24423336666666666666666666663300000000
+8888888889999999009990000099990002999920002220000222222000000044000000002200000033f442333f42423366666666666666666666666300000000
+f22222f08888888809999900099999900299992000828000022222200000004400000000220000003f4442233f42422366666677667766776676666300000000
+088888707772222009999900299999922299992202222200022222200000004400000000220000003f4424233f44242366666666666666666667666300000000
+088888707678888828999820829999288299992828222820289999820000004400000000220000003f4244233f42442366676666666666666666666300000000
+02222200666288208299928028299282282992828282828082999928000000440000000022000000b4b4b24bb4b4b24b66676666666666666667666300000000
+080000000020000028202820828998288282282828202820282002820000004440000000220000003bbbbbb33bbbbbb366666663333333336667666300000000
+08888800088888770000000000000000022222200021200002822820000000445555555522000000000000003333333366666663333333336666666366666663
+89999980899999870088800000888800298998920022200002222220000000442222222222000000000000003333333366666666666666666666666366666663
+89999998899999980878780008788780297887920022200002299220000000422222222222000000000000003333333366676666666666666667666366676663
+22222220222222260918190008199180291881920278720000788700000000022222222220000000000000003333333366676666666666666667666366676663
+ff1ff1f08f1f17770995990029555592295555920818180008188180000000000000000000000000000000003333333366667677667766776676666366666663
+0fffff7008fff7572895982082555528825115282222222028999982000000000000000000000000000000003333333366666666666666666666666366666663
+02877777028886668299928028299282285555828299928082988928000000000000000000000000000000003333333336666666666666666666663366676663
+08000000020000002820282082899828828998282820282028000082000000000000000000000000000000003333333333666666666666666666633366676663
 00000000000000007008800780088008a008800a0555555000055000005555000005500000000000000000000000000000000000000000000000000000000000
 00000000070000700888888000899800008998005555555505555550055005500500005000000000000000000000000000000000000000000000000000000000
-000000000088880008899880089aa980089559805555555555500555000000000000000000000000000000000000000000000000000000000000000000000000
+000000000088880008799780089aa980089559805555555555500555000000000000000000000000000000000000000000000000000000000000000000000000
 0008700000879800889aa98889a00a98895005985555555505000050000000000000000000000000000000000000000000000000000000000000000000000000
 0007800000897800889aa98889a00a98895005980500005000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000088880008899880089aa980089009800900009000900000000008000000000000000000000000000000000000000000000000000000000000000000
+000000000088880008799780089aa980089009800900009000900000000008000000000000000000000000000000000000000000000000000000000000000000
 00000000070000700888888000899800008998000890008000000090080000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000007008800780088008a008800a0080980008000000009000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000222222000000000000000000000000000000000000000000000080005ccccc6522000000000000440000000000000000
-08888800088888000099800000988000299982000000000000000000000000000000000000000000000880002ccccc22cc000000000000440000000000000000
-89999980899999800999780009927800299278550000000000000000000000000000000000000000008888882ccccc22cc000000000000cc0000000000000000
-89999998899999980999185599921855299218550000000000000000000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
-222222202222222009999900999999552999995500000000000000000000000000000000000000000088888800000000cc000000000000cc0000000000000000
-ffff1f00788f1f7722292220222222202222222000000000000000000000000000000000000000000008800000000000cc000000000000cc0000000000000000
-088fff70788fff752928292029898982298989820000000000000000000000000000000000000000000080000000000022000000000000cc0000000000000000
-02877777728888772220222002222220022222200000000000000000000000000000000000000000000000000000000022000000000000445ccccc6400000000
-08888800008888800000000000000000002222000000000000000000000000000088800000000000000000000000000033555555555555555555533300000000
-89999980689999980000000000000000029999200000000000000000000000000088800000000000000000000000000035ccccccccccccccccccc63300000000
-8888888889999999009990000099990002999920000000000000000000000000008880000000088888888888888000005ccccccccccccccccccccc6300000000
-f22222f088888888099999000999999002999920000000000000000000000000008880000000888888888888888800005ccccccccccccccccccccc6300000000
-0888887077722220099999008999999882999928000000000000000000000000008880000008888888888888888880005ccccccccccccccccccccc6300000000
-0888887076788888829992802899998228999982000000000000000000000000008880000008888000000000088880005ccccccccccccccccccccc6300000000
-0222220066628828289998208289982882899828000000000000000000000000008880000008880000000000008880005cccccc666666666cccccc6300000000
-0000080000000020828082802829928228222282000000000000000000000000008880000008880000000000008880005ccccc63333333335ccccc6300000000
-0888880008888877000000000000000002222220000000000000000000000000008880000008880000000000008880005ccccc63333333335ccccc635ccccc63
-8999998089999987008880000088880029899892000000000000000000000000008880000008888000000000088880005cccccc555555555cccccc635ccccc63
-8999999889999998087878000878878029788792000000000000000000000000008880000008888888888888888880005ccccccccccccccccccccc635ccccc63
-2222222022222226091819000819918029188192000000000000000000000000888888800000888888888888888800005ccccccccccccccccccccc635ccccc63
-ff1ff1f08f1f1777099599008955559829555592000000000000000000000000088888000000088888888888888000005ccccccccccccccccccccc635ccccc63
-0fffff7008fff757829592802855558228511582000000000000000000000000008880000000000000000000000000006ccccccccccccccccccccc635ccccc63
-02877777028886662899982082899828825555280000000000000000000000000008000000000000000000000000000036ccccccccccccccccccc6335ccccc63
-0000800000002000828082802829928228299282000000000000000000000000000000000000000000000000000000003366666666666666666663335ccccc63
+00000000000000000000000000000000222222000021000002222828000000000000000000000000000080005ccccc6522000000000000440000000000000000
+08888800088888000000000000988000299982000222000022222220000000000000000000000000000880002ccccc22cc000000000000440000000000000000
+89999980899999800099800009927800299278552220000022222000000000000000000000000000008888882ccccc22cc000000000000cc0000000000000000
+89999998899999980999780099921855299218552200287022299870000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
+222222202222222009991855999999552999995522802818299998180000000000000000000000000088888800000000cc000000000000cc0000000000000000
+ffff1f00788f1f7722292220222222202222222022222222222922280000000000000000000000000008800000000000cc000000000000cc0000000000000000
+088fff70788fff752929292029898982298989822989898229282920000000000000000000000000000080000000000022000000000000cc0000000000000000
+02877777728888772228222002222220022222200222222022202220000000000000000000000000000000000000000022000000000000445ccccc6400000000
+08888800008888800000000000000000002222000001000000222200000000000088800000000000000000000000000033555555555555555555533300000000
+89999980689999980000000000000000029999200022200002222220000000000088800000000000000000000000000035ccccccccccccccccccc63300000000
+8888888889999999009990000099990002999920002220000222222000000000008880000000088888888888888000005ccccccccccccccccccccc6300000000
+f22222f088888888099999000999999002999920008280000222222000000000008880000000888888888888888800005ccccccccccccccccccccc6300000000
+0888887077722220099999008999999882999928022222000222222000000000008880000008888888888888888880005ccccccccccccccccccccc6300000000
+0888887076788888829992802899998228999982822222808222222800000000008880000008888000000000088880005ccccccccccccccccccccc6300000000
+0222220066628828289998208289982882899828282228202899998200000000008880000008880000000000008880005cccccc666666666cccccc6300000000
+0000080000000020828082802829928228222282828082808280082800000000008880000008880000000000008880005ccccc63333333335ccccc6300000000
+0888880008888877000000000000000002222220002120000282282000000000008880000008880000000000008880005ccccc63333333335ccccc635ccccc63
+8999998089999987008880000088880029899892002220000222222000000000008880000008888000000000088880005cccccc555555555cccccc635ccccc63
+8999999889999998087878000878878029788792002220000229922000000000008880000008888888888888888880005ccccccccccccccccccccc635ccccc63
+2222222022222226091819000819918029188192027872000078870000000000888888800000888888888888888800005ccccccccccccccccccccc635ccccc63
+ff1ff1f08f1f1777099599008955559829555592081818000818818000000000088888000000088888888888888000005ccccccccccccccccccccc635ccccc63
+0fffff7008fff757829592802855558228511582822222808299992800000000008880000000000000000000000000006ccccccccccccccccccccc635ccccc63
+02877777028886662899982082899828825555282899982028988982000000000008000000000000000000000000000036ccccccccccccccccccc6335ccccc63
+0000800000002000828082802829928228299282828082808200002800000000000000000000000000000000000000003366666666666666666663335ccccc63
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2249,7 +2355,7 @@ __gff__
 __map__
 0000000018080808080828000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00185e08073b3be13b3b29000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-18077fe23be0e23b3b3b09280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+18077fe13be0e23b3b3b09280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 273b7f2c2d2d2d2d2d2e3b290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 273b7f3f2a2a2a2a2a3f2a290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 272a7f3f2a2a1f6c6d0e6d5c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2274,7 +2380,7 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00020000146401a6002065021640266102064018600146501864021600266301b6201065012610176401d6002162028640226501a6201260013630176001964020640296102860024620216501b630166000f620
 000300000c3400835007340053500334002350013400733007340063300534004330033400233009320083300732006330043200433003320023200a340093300834007330063400533003340023300134001330
-00020000130501605022650190301b03021640256401d0301b06019030170201d610106100e050296400a0201d620080200704026620106200305002030010402563001030196201962013650050102261005010
+01020000130501605022650190301b03021640256401d0301b06019030170201d610106100e050296400a0201d620080200704026620106200305002030010402563001030196201962013650050102261005010
 000300000c4500846007450054600345002460014500744007450064400545004440034500244009430084400743006440044300444003430024400a450094400845007440064500544003450024400145001440
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2285,4 +2391,5 @@ __sfx__
 000300003f640046403f640026403f640036403f640026403f640026403f640056403f640036403f640046403f640046403f640076403f640046403f640066403f64000640006400064000640006400064000640
 0003000032660396603c6503e6503b65037650356502f6502a6501f650196501564012640106400d6400c6400a6400964008640066400564007640066400b6400a64006640036400363003630036300363008630
 0003000032660396603c6603e6603b66037660356602f6502a6501f650196501565012650106500d6400c6400a640096400d640396603d6603f6603966035660336602c66029640216401d640196401464012640
-000300003f600046003f600026003f600036003f600026003f600026003f600056003f600036003f600046003f600046003f600076003f600046003f600066003f60000600006000060000600006000060000600
+000300002f650396503d6503d650386502f650306502d65033350353503e3503a3503735034350303502b35026350223501c350143500e3500835005350003500036022670276703c6703c6703c6703c6703a670
+0004000025656396563e6563f6563b656396562e656266560965624656356563a6563d6563d656396563765624656096562265635656386563d6563e6563b656376662f6760a6760767604676026760167600676

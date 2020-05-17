@@ -7,20 +7,19 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Bases
-* Building from bases
-* Complete AI
- * Capture cities and bases
- * Build from cities and bases
 * Long range units
-* Advanced AI
+* Stage 3 AI
  * Use of long range units
+ * Better build order decision
+* APC
+* Stage 4 AI
+ * APC usage
  * Retreating
 * Music
 * 3 Campaign missions
-* Splash screen
+* End Turn Transitions
 * Save/load functionality
-* Sort units by y value for drawing
+* Splash screen
 * Make end_turn a coroutine and play an animation 
 * ctrl + f for "refact" comments for refactoring suggestions
 * 8 commanders
@@ -47,8 +46,16 @@ Done
   * Heal units on them by 2 per turn
 * Income
 * HQ
+* Bases
+* Building from bases
+* Stage 2 AI
+ * Capture cities and bases
+ * Build from cities and bases
+* AI vs AI battles
+* Sort units by y value for drawing
+
 
 Bugs-to-fix
 -----------
 
-* The red selection that shows what the unit can attack lies sometimes, particularly with tanks, at least in the starting map. it shows one more tiles than is possible to move to
+* Getting units attack range doesn't account for places they can't move to(like mountains)
