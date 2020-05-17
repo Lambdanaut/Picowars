@@ -38,7 +38,15 @@ sfx_war_tank_combat = 26
 sfx_artillery_combat = 27
 sfx_rocket_combat = 28
 
--- byte field lengths 
+-- ai unit ratios
+-- must add up to 100
+ai_unit_ratio_infantry = 15
+ai_unit_ratio_mech = 15
+ai_unit_ratio_recon = 14
+ai_unit_ratio_artillery = 14
+ai_unit_ratio_tank = 14
+ai_unit_ratio_rocket = 15
+ai_unit_ratio_war_tank = 13
 
 
 -- byte constants
@@ -109,6 +117,7 @@ function make_infantry()
   unit.cost = 1
   unit.range_min = 0
   unit.range_max = 0
+  unit.ai_unit_ratio = ai_unit_ratio_infantry
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_infantry_combat
 
@@ -136,6 +145,7 @@ function make_mech()
   unit.cost = 3
   unit.range_min = 0
   unit.range_max = 0
+  unit.ai_unit_ratio = ai_unit_ratio_mech
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_mech_combat
 
@@ -163,6 +173,7 @@ function make_recon()
   unit.cost = 4
   unit.range_min = 0
   unit.range_max = 0
+  unit.ai_unit_ratio = ai_unit_ratio_recon
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_recon_combat
 
@@ -194,6 +205,7 @@ function make_artillery()
   unit.cost = 6
   unit.range_min = 2
   unit.range_max = 3
+  unit.ai_unit_ratio = ai_unit_ratio_artillery
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_artillery_combat
 
@@ -221,6 +233,7 @@ function make_tank()
   unit.cost = 7
   unit.range_min = 0
   unit.range_max = 0
+  unit.ai_unit_ratio = ai_unit_ratio_tank
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_tank_combat
 
@@ -248,6 +261,7 @@ function make_rocket()
   unit.cost = 15
   unit.range_min = 3
   unit.range_max = 5
+  unit.ai_unit_ratio = ai_unit_ratio_rocket
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_rocket_combat
 
@@ -275,6 +289,7 @@ function make_war_tank()
   unit.cost = 16
   unit.range_min = 0
   unit.range_max = 0
+  unit.ai_unit_ratio = ai_unit_ratio_war_tank
   unit.moveout_sfx = sfx_war_tank_moveout
   unit.combat_sfx = sfx_war_tank_combat
 
@@ -323,6 +338,7 @@ function write_unit(u)
   poke_increment(u.cost)
   poke_increment(u.range_min)
   poke_increment(u.range_max)
+  poke_increment(u.ai_unit_ratio)
   poke_increment(u.moveout_sfx)
   poke_increment(u.combat_sfx)
 

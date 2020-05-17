@@ -21,10 +21,10 @@ palette_green = "green earth🅾️"
 palette_pink = "pink groove♥"
 
 palette_icon = {}
-palette_icon[palette_orange] = 240
-palette_icon[palette_blue] = 241
-palette_icon[palette_green] = 242
-palette_icon[palette_pink] = 243
+palette_icon[palette_orange] = 192
+palette_icon[palette_blue] = 208
+palette_icon[palette_green] = 193
+palette_icon[palette_pink] = 209
 
 co_icon = {}
 co_icon[palette_orange] = 238
@@ -82,15 +82,17 @@ unit_types = {}
 -- coroutines
 -- active_attack_coroutine = nil
 -- active_ai_coroutine = nil
+-- active_end_turn_coroutine = nil
 -- currently_attacking = false
-attack_coroutine_u1 = nil
-attack_coroutine_u2 = nil
+-- attack_coroutine_u1 = nil
+-- attack_coroutine_u2 = nil
 
 -- globals
 last_checked_time = 0.0
 delta_time = 0.0  -- time since last frame
 unit_id_i = 0 -- unit id counter. each unit gets a unique id
 attack_timer = 0 -- used to space out attack co-routine
+end_turn_timer = 0 -- used to time out end turn animation
 memory_i = 0x4300 -- counter to determine where we are in reading from memory
 
 
@@ -115,6 +117,7 @@ function _update()
   delta_time = t - last_checked_time
   last_checked_time = t
   attack_timer += delta_time  -- update attack timer. used to space out attack co-routine
+  end_turn_timer += delta_time
   -- update level manager
   current_map:update()
   selector:update()
@@ -142,24 +145,32 @@ function _draw()
   for i = 1, 2 do
     local hq = players_hqs[i]
     set_palette(hq.team)
-    spr(208, hq.p[1], hq.p[2] - 11) -- draw the spire of an hq
+    spr(67, hq.p[1], hq.p[2] - 13) -- draw the spire of an hq
     pal()
   end
   
-  sort_table_by_y(units)
+  sort_table_by_f(units, y_comparision)
   for unit in all(units) do
     unit:draw()
   end
 
-  -- do ai_update in draw section for debug purposes
-  ai_update()
+  -- run end_turn coroutine thread
+  if active_end_turn_coroutine and costatus(active_end_turn_coroutine) == 'dead' then
+    active_end_turn_coroutine = nil
+  elseif active_end_turn_coroutine then
+    coresume(active_end_turn_coroutine)
+  end
+
+  if not active_end_turn_coroutine then
+    ai_update()
+  end
 
   selector:draw()
 end
 
 -- lvl manager code
 players_turn = 0
-players = {palette_orange, palette_green}
+players = {palette_green, palette_blue}
 players_reversed = {}  -- reverse index for getting player index by team
 players_reversed[players[1]] = 1
 players_reversed[players[2]] = 2
@@ -173,27 +184,30 @@ function end_turn()
   players_turn = players_turn % 2 + 1
   players_turn_team = players[players_turn]
 
-  -- increment the turn count if we're on the second player right now
-  -- will need to change if we include multiplayer
-  turn_i += players_turn - 1
+  -- increment the turn count
+  turn_i += 1
 
   for unit in all(units) do
     unit.is_resting = false
 
     -- heal all units on cities
-    for struct in all(structures) do
-      if unit.team == players_turn_team and struct.team == players_turn_team and points_equal(unit.p, struct.p) then
-        unit.hp = min(unit.hp + 2, 10)
-      end
+    local struct = get_struct_at_pos(unit.p, players_turn_team)
+    if unit.team == players_turn_team and struct then
+      unit.hp = min(unit.hp + 2, 10)
     end
   end
 
   for struct in all(structures) do
-    if struct.type == 2 and struct.team == players_turn_team then
+    if struct.team == players_turn_team then
       -- add income for each city
       players_gold[players_turn] += 1
     end
   end
+
+  selector.p = players_hqs[players_turn].p
+
+  -- create end_turn animation coroutine
+  active_end_turn_coroutine = cocreate(end_turn_coroutine)
 
 end
 
@@ -238,7 +252,7 @@ function ai_coroutine()
   printh("starting ai_coroutine\n---------------------")
   -- 3 waves of passing through our units
 
-  for i = 1, 2 do
+  for i = 1, 3 do
     for u in all(ai_units) do 
       if not u.is_resting then
         -- get unit's movable tiles
@@ -270,7 +284,8 @@ function ai_coroutine()
               has_attacked = true
             end
           end
-        else
+        elseif (u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team)) then
+          -- if we're not an infantry or we're an infantry that's not capturing, look for the best melee attack we can make
           -- melee attacks
           local attackables = {}
 
@@ -315,6 +330,23 @@ function ai_coroutine()
           if manhattan_distance(goal, u.p) < 5 and u.index > 2 then
             -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
             goal = players_hqs[players_turn].p
+          elseif u.hp < 4 or (u.hp < 9 and get_struct_at_pos(u.p, players_turn_team, nil, nil, 3)) then
+            -- if our health is low, or we're healing and standing on a structure that's not a base, navigate to the nearest friendly city/hq
+            -- refac: combine this with the capture structures for loop below. maybe a "get_nearest_struct" function or "get_nearest_obj"
+            local nearest_struct
+            local nearest_struct_d = 32767
+            for struct in all(structures) do
+              local d = manhattan_distance(u.p, struct.p)
+              local unit_at_struct = get_unit_at_pos(struct.p)
+              if d < nearest_struct_d and struct.team == players_turn_team and (struct.type == 1 or struct.type == 2) and
+                  (not unit_at_struct or unit_at_struct.id == u.id) then
+                nearest_struct = struct
+                nearest_struct_d = d
+              end
+            end
+            if nearest_struct then
+              goal = nearest_struct.p
+            end
           elseif u.index < 3 then
             -- if we're an infantry or mech, navigate to nearest capturable structure
             local nearest_struct
@@ -322,16 +354,20 @@ function ai_coroutine()
             for struct in all(structures) do
               local d = manhattan_distance(u.p, struct.p)
               local unit_at_struct = get_unit_at_pos(struct.p)
-              if struct.team ~= players_turn_team and d < nearest_struct_d and 
-                  (not unit_at_struct or unit_at_struct.id == u.id or unit_at_struct.team ~= players_turn_team) then
+              if d < nearest_struct_d and struct.team ~= players_turn_team and
+                  (not unit_at_struct or (unit_at_struct.id == u.id or unit_at_struct.team ~= players_turn_team)) then
                 nearest_struct = struct
                 nearest_struct_d = d
               end
             end
-            goal = nearest_struct.p
+            if nearest_struct then
+              goal = nearest_struct.p
+            end
+
           end
 
-          local path = ai_pathfinding(u, goal, true)
+          local path = ai_pathfinding(u, goal, true, true)
+
           local path_movable = {}
           for t in all(path) do
             if point_in_table(t, unit_movable_tiles) then
@@ -350,6 +386,12 @@ function ai_coroutine()
 
   -- build units
 
+  -- sort the structures based on their distance from the enemy's hq
+  sort_table_by_f(structures, 
+    function(struct1, struct2)
+      return manhattan_distance(struct1.p, players_hqs[3-players_turn].p) > manhattan_distance(struct2.p, players_hqs[3-players_turn].p)
+    end
+  )
   for struct in all(structures) do
     if struct.type == 3 and struct.team == players_turn_team and not get_unit_at_pos(struct.p) then
       -- build unit for each of our bases
@@ -358,31 +400,40 @@ function ai_coroutine()
       -- artificially add 1 to counts to stop division by 0 errors
       local infantry_count = 1
       local mech_count = 1
-      local unit_count = 1
+      local total_unit_count = 1
+      local unit_counts = {1, 1, 1, 1, 1, 1, 1}
+
       for u in all(units) do
         if u.team == players_turn_team then
-          if u.index == 1 then
-            infantry_count += 1
-          elseif u.index == 2 then
-            mech_count += 1
-          end
-          unit_count += 1
+          unit_counts[u.index] += 1
+          total_unit_count += 1
         end
       end
 
-      if infantry_count / unit_count < 0.3 then
-        struct:build(1)
-      elseif mech_count / unit_count < 0.2 then
-        struct:build(2)
-      else
-        for i = #unit_types, 3, -1 do
-          -- count backwards from the most expensive non-infantry/mech unit types 
-          -- build the first one we have the money for
-          if unit_types[i].cost <= players_gold[players_turn] then
-            struct:build(i)
+      local roll_to_save = 0
+      -- if players_gold[players_turn] < 14 and total_unit_count > 1 then
+      --   roll_to_save = flr(rnd(2)) -- roll 1 out of 2 chances to save money this turn
+      -- end
+
+      local to_build
+      if roll_to_save == 0 then
+        for i = #unit_types, 1, -1 do
+          -- count backwards from the most expensive unit types 
+          -- build the first one we have the money for that we don't have enough of
+          local unit_type = unit_types[i]
+          if unit_type.cost <= players_gold[players_turn] then
+            to_build = i
+            if unit_counts[i] * 100 / total_unit_count < unit_type.ai_unit_ratio then
+              break
+            end
           end
         end
       end
+
+      if to_build then
+        struct:build(to_build)
+      end
+
     end
   end
 
@@ -398,16 +449,15 @@ function ai_move(u, p)
     yield()
   end
   if u.index < 3 then
-    for struct in all(structures) do
-      if points_equal(struct.p, u.p) then
-        struct:capture(u)
-      end
+    local struct = get_struct_at_pos(u.p, nil, players_turn_team)
+    if struct then
+      struct:capture(u)
     end
   end
   u.is_resting = true
 end
 
-function ai_pathfinding(unit, target, ignore_enemy_units)
+function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
 
   -- draw marker on unit we're pathfinding for
   if debug then rectfill(unit.p[1], unit.p[2], unit.p[1] + 8, unit.p[2] + 8) end
@@ -445,10 +495,10 @@ function ai_pathfinding(unit, target, ignore_enemy_units)
     -- explore this tile's neighbors
     local current_t_g_score = table_point_index(g_scores, current_t)
 
-    if debug then
-      rectfill(current_t[1], current_t[2], current_t[1] + 8, current_t[2] + 8, (current_t[1]+current_t[2]) % 15 )
-      yield()
-    end
+    -- if debug then
+    --   rectfill(current_t[1], current_t[2], current_t[1] + 8, current_t[2] + 8, (current_t[1]+current_t[2]) % 15 )
+    --   yield()
+    -- end
 
     -- add all neighboring tiles to the explore list, while reducing their travel leftover
     for t in all(get_tile_adjacents(current_t)) do
@@ -466,7 +516,9 @@ function ai_pathfinding(unit, target, ignore_enemy_units)
 
           to_explore_parents[t] = current_t
           g_scores[t] = new_g_score
-          local new_f_score = new_g_score + manhattan_distance(t, target)
+          local friendly_units_weight = 0
+          if weigh_friendly_units and unit_at_t and unit_at_t.team == unit.team then friendly_units_weight = 1 end
+          local new_f_score = new_g_score + manhattan_distance(t, target) + friendly_units_weight
 
           -- in the wiki pseudocode it says to record the fscore even if the point is already in the to_explore list
           -- we're not doing that and things seem fine. just keep an eye out if we see weird behavior
@@ -512,6 +564,14 @@ function get_unit_at_pos(p)
   for unit in all(units) do
     if points_equal(p, unit.p) then
       return unit
+    end
+  end
+end
+
+function get_struct_at_pos(p, team, not_team, struct_type, not_struct_type)
+  for struct in all(structures) do
+    if points_equal(p, struct.p) and (not team or struct.team == team) and (not not_team or struct.team ~= not_team) and (not struct_type or struct.type == struct_type) and (not not_struct_type or struct.type ~= not_struct_type) then
+      return struct
     end
   end
 end
@@ -586,7 +646,7 @@ attack_coroutine = function()
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
   attack_coroutine_u2.hp = max(0, attack_coroutine_u2.hp - damage_done)
   sfx(attack_coroutine_u1.combat_sfx)
-  while attack_timer < 1.25 do
+  while attack_timer < 1.25 and not debug do
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
     yield()
   end
@@ -597,7 +657,7 @@ attack_coroutine = function()
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
     attack_coroutine_u1.hp = max(0, attack_coroutine_u1.hp - damage_done)
     sfx(attack_coroutine_u2.combat_sfx)
-    while attack_timer < 1.25 do
+    while attack_timer < 1.25 and not debug do
       print("-" .. damage_done, attack_coroutine_u1.p[1], attack_coroutine_u1.p[2] - 4 - attack_timer * 8, 8)
       yield()
     end
@@ -618,16 +678,34 @@ attack_coroutine = function()
 
   if explode_at then
     attack_timer = 0
-    while attack_timer < 1.5 do
-      spr(64 + flr(attack_timer*6), explode_at[1], explode_at[2] - 3 - attack_timer * 10)
+    while attack_timer < 1.5 and not debug do
+      spr(71 + flr(attack_timer*6), explode_at[1], explode_at[2] - 3 - attack_timer * 10)
       yield()
     end
   end
   explode_at = nil
 
   currently_attacking = false
-
 end
+
+end_turn_coroutine = function()
+  end_turn_timer = 0
+
+  while end_turn_timer < 1.25 and not debug do
+    set_palette(players_turn_team)
+    rectfill(cam.p[1], cam.p[2] + 51, cam.p[1] + 128, cam.p[2] + 76, 9)
+    line(cam.p[1], cam.p[2] + 77, cam.p[1] + 128, cam.p[2] + 77, 8)
+    local rect_offset = 0
+    if turn_i > 9 then
+      rect_offset = 4
+    end
+    rectfill(cam.p[1] + 57, cam.p[2] + 61, cam.p[1] + 77 + rect_offset, cam.p[2] + 67, 8)
+    print("day " .. turn_i, cam.p[1] + 58, cam.p[2] + 62, 2)
+    yield()
+    pal()
+  end
+end
+
 
 function make_cam()
   cam = {}
@@ -795,8 +873,11 @@ function make_selector()
         elseif self.selection_type == 8 then
           -- do build unit at base/factory
 
-          self.selection:build(self.prompt_selected)
-          self:stop_selecting()
+          if players_gold[players_turn] > 0 then
+            -- ensure player has gold to spend. this fixes a bug where infantry(default prompt selection) can be built when you have 0g
+            self.selection:build(self.prompt_selected)
+            self:stop_selecting()
+          end
         end
       elseif btnp(5) and self.selection_type ~= 5 and self.selection_type ~= 7 then
         -- stop selecting
@@ -863,12 +944,11 @@ function make_selector()
         end
       elseif btnp(4) and selection[1] == 1 and not get_unit_at_pos(self.p) then
         -- do base selection
-        for struct in all(structures) do
-          if struct.team == players_turn_team and points_equal(struct.p, self.p) and struct.type == 3 then
+        local struct = get_struct_at_pos(self.p, players_turn_team, nil, 3)
+        if struct then
             self.selecting = true
             self.selection = struct
             self:start_build_unit_prompt()
-          end
         end
 
       elseif btnp(4) then
@@ -980,17 +1060,15 @@ function make_selector()
     spr(palette_icon[players_turn_team], x_corner + 19, y_corner + 2, 1, 1)  -- icon
 
     -- draw structure capture leftover
-    for struct in all(structures) do
-      if points_equal(struct.p, self.p) then
-        -- change sprite to uncaptured structure so we don't draw their colors wrong
-        local type_to_sprite_map = {28, 29, 30}
-        tile = type_to_sprite_map[struct_type]
-        rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
-        local capture_left = struct.capture_left
-        if struct.capture_left < 10 then capture_left = "0" .. struct.capture_left end
-        print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
-        break
-      end
+    local struct = get_struct_at_pos(self.p)
+    if struct then
+      -- change sprite to uncaptured structure so we don't draw their colors wrong
+      local type_to_sprite_map = {28, 29, 30}
+      tile = type_to_sprite_map[struct_type]
+      rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
+      local capture_left = struct.capture_left
+      if struct.capture_left < 10 then capture_left = "0" .. struct.capture_left end
+      print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
     end
     spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
 
@@ -1025,14 +1103,11 @@ function make_selector()
       add(self.prompt_options, 2)
     end
 
-    for struct in all(structures) do
-      if points_equal(struct.p, self.selection.p) then
-        -- ensure we're an infantry or mech with `self.selection.index < 3`
-        if self.selection.index < 3 and struct.team ~= players_turn_team then 
-          -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
-          add(self.prompt_options, 3)
-        end
-      end
+    local struct = get_struct_at_pos(self.selection.p)
+    if struct and self.selection.index < 3 and struct.team ~= players_turn_team then
+      -- ensure we're an infantry or mech with `self.selection.index < 3`
+      -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
+      add(self.prompt_options, 3)
     end
 
     self.prompt_selected = #self.prompt_options
@@ -1199,9 +1274,9 @@ function make_selector()
     local flip_y
     local flip_horizontal = false
 
-    local arrowhead = 120
-    local arrowhead_l = 90
-    local vertical = 104
+    local arrowhead = 90
+    local arrowhead_l = 91
+    local vertical = 89
     local horizontal = 106
     local curve_w_n = 123
     local curve_n_e = 121
@@ -1309,7 +1384,7 @@ function make_war_maps()
   war_maps = {}
 
   -- load war maps
-  add(war_maps, make_war_map({-16, -16, 128, 112}))
+  add(war_maps, make_war_map({0, 0, 64, 216}))
 
   return war_maps
 
@@ -1350,11 +1425,8 @@ function make_war_map(r)
     -- fill with blue sea
     rectfill(x-8, y-8, x+w+15, y+h+15, 12)
 
-
-    -- fill background with blue water
-    map(0, 0, 0, 0, 18, 18)
-
-    -- pal()
+    -- draw map tiles
+    map(self.r[1] / 8, self.r[2] / 8, 0, 0, self.r[3] / 8 + 8, self.r[4] / 8 + 8)
   end
 
   war_map.load = function(self)
@@ -1389,13 +1461,13 @@ function make_structure(struct_type, p, team)
   -- set structure sprite based on the structure type
   local struct_sprite
   if struct_type == 1 then 
-    struct_sprite = 224 
+    struct_sprite = 64
     players_hqs[players_reversed[team]] = struct  -- add this hq to the list of hqs
     if team == players[1] then
       selector.p = p
     end
-  elseif struct_type == 2 then struct_sprite = 225 
-  else struct_sprite = 226 end
+  elseif struct_type == 2 then struct_sprite = 65
+  else struct_sprite = 66 end
 
   -- components
   local active_animator
@@ -1404,7 +1476,7 @@ function make_structure(struct_type, p, team)
     team = 5 
     active_animator = false
   end
-  struct.animator = make_animator(struct, 0.4, struct_sprite, -32, team, {0, -3}, nil, active_animator)
+  struct.animator = make_animator(struct, 0.4, struct_sprite, -58, team, {0, -5}, nil, active_animator)
 
   struct.update = function(self)
     if not get_unit_at_pos(self.p) then
@@ -1440,7 +1512,7 @@ function make_structure(struct_type, p, team)
     players_gold[players_turn] -= new_unit.cost
     new_unit.is_resting = true
     add(units, new_unit)
-    selector.p = {self.p[1], self.p[2]}
+    -- selector.p = {self.p[1], self.p[2]}
   end
 
   return struct
@@ -1450,12 +1522,12 @@ end
 function make_units()
   units = {}
 
-  units[1] = make_unit(1, {24, 32})
-  units[2] = make_unit(2, {40, 32})
-  units[3] = make_unit(7, {24, 40})
-  units[4] = make_unit(1, {64, 32}, palette_green)
-  units[5] = make_unit(3, {64, 40}, palette_green)
-  units[6] = make_unit(6, {64, 48}, palette_green)
+  -- units[1] = make_unit(1, {24, 32})
+  -- units[2] = make_unit(2, {40, 32})
+  -- units[3] = make_unit(7, {24, 40})
+  -- units[4] = make_unit(1, {64, 32}, palette_green)
+  -- units[5] = make_unit(3, {64, 40}, palette_green)
+  -- units[6] = make_unit(6, {64, 48}, palette_green)
 end
 
 function make_unit(unit_type_index, p, team)
@@ -1622,8 +1694,13 @@ function make_unit(unit_type_index, p, team)
         x_change = -1
       end
 
-      self.p[1] += x_change
-      self.p[2] += y_change
+      if debug then
+        self.p[1] += x_change*8
+        self.p[2] += y_change*8
+      else
+        self.p[1] += x_change
+        self.p[2] += y_change
+      end
 
     else
       -- no more points left. stop moving
@@ -1725,7 +1802,7 @@ function make_unit(unit_type_index, p, team)
     if not tile_p then tile_p = u2.p end
     if return_strike and self.ranged then return 0 end
     local tile_defense = get_tile_info(mget(tile_p[1] / 8, tile_p[2] / 8))[2]
-    return flr(self.damage_chart[u2.index] * 1.25 * our_life / 10 * tile_defense + rnd(1))
+    return flr(self.damage_chart[u2.index] * 1.25 * max(0, our_life) / 10 * tile_defense + rnd(1))
   end
 
   return unit
@@ -1828,6 +1905,7 @@ function load_assets()
     u.range_min = peek_increment()
     u.range_max = peek_increment()
     if u.range_min > 0 then u.ranged = true end  -- add helper variable to determine if unit is ranged
+    u.ai_unit_ratio = peek_increment()
     u.moveout_sfx = peek_increment()
     u.combat_sfx = peek_increment()
 
@@ -1890,14 +1968,19 @@ function point_in_rect(p, r)
 end
 
 -- table functions
-function sort_table_by_y(a)
+function sort_table_by_f(a, f)
   for i=1,#a do
     local j = i
-      while j > 1 and a[j-1].p[2] > a[j].p[2] do
+      while j > 1 and f(a[j-1], a[j]) do
         a[j],a[j-1] = a[j-1],a[j]
         j = j - 1
       end
   end
+end
+
+function y_comparision(u1, u2)
+  -- sort function for sort_table_by_f that compares y values
+  return u1.p[2] > u2.p[2]
 end
 
 function point_in_table(p, t, keys)
@@ -2087,69 +2170,69 @@ end
 
 
 __gfx__
-7700007700000000777770000000000000000000000000000000000000000044000000002200000000000000000000000000000000000000566666555ccccc63
-7000000707700770755000000070007007070707000000000000000000000044000000002200000000000000000000000000000000000000c66666cc5c5c5c66
-00000000070000707567000007070707007000700000000000000000000000440000000022000000000000000000000000000000000000005667665c66666666
-0000000000000000705670000070007007070707000000000000000000000044000000002200000000000000000000000000000000000000c66766cc66666666
-00000000000000007005670000000000000000000000000000000000000000440000000022000000000000000000000000dddd00000000005666665c66776677
-0000000007000070000056500070007007070707000000000000000000000044000000002200000000000000000000000ddddd5000000000c66666cc66666666
-7000000707700770000005500707070700700070000000000000000000000444000000002220000000000000000000000ddddd50000000006667666666666666
-7700007700000000000000000070007007070707000000000000000044444443444444443244444400000000000000000d55555000000000666766635c5c5c66
-0888880008888800000000000000000022222200000210000222282855555553000000003555555500f0000000000000006dd500005555000000000033b33b33
-899999808999998000998000009880002999820000222000222222202222444500000000522222220f4400f000000000065555500d7575d0000000053bbb5bb3
-8999999889999998099978000992780029927855022200002222200022222244000000002222222272427f4200000000067dd750ddd55ddd005500553bb5bb53
-22222220222222200999185599921855299218552220287022299870222222440000000022222222072707220000000006dddd50d7d57d7d055d055dbb5b5bb5
-ffff1f00788f1f770999990099999955299999552280281829999818000002440000000022200000007f40770000000065555555ddd55ddd55dd55dd3b5bbb53
-088fff70788fff75222922202222222022222220222222222229222800000044000000002200000007244270000ff00067d7d7d5d7d57d7dd7d7d7d7bbb5bbb5
-0287777772888877282828202898989228989892289898922828282000000044000000002200000000722700000f20006dddddd5ddd55ddddddddddd33433433
-080080000200200022202220022222200222222002222220222022200000004400000004220000000007700000f4220067d7d7d5ddd55dddd7d7d7d733333333
-08888800008888800000000000000000002222000001000000222200000000440000000022000000333ff3333f42423333666666666666666666633300000000
-8999998068999998000000000000000002999920002220000222222000000044000000002200000033f442333f24423336666666666666666666663300000000
-8888888889999999009990000099990002999920002220000222222000000044000000002200000033f442333f42423366666666666666666666666300000000
-f22222f08888888809999900099999900299992000828000022222200000004400000000220000003f4442233f42422366666677667766776676666300000000
-088888707772222009999900299999922299992202222200022222200000004400000000220000003f4424233f44242366666666666666666667666300000000
-088888707678888828999820829999288299992828222820289999820000004400000000220000003f4244233f42442366676666666666666666666300000000
-02222200666288208299928028299282282992828282828082999928000000440000000022000000b4b4b24bb4b4b24b66676666666666666667666300000000
-080000000020000028202820828998288282282828202820282002820000004440000000220000003bbbbbb33bbbbbb366666663333333336667666300000000
-08888800088888770000000000000000022222200021200002822820000000445555555522000000000000003333333366666663333333336666666366666663
-89999980899999870088800000888800298998920022200002222220000000442222222222000000000000003333333366666666666666666666666366666663
-89999998899999980878780008788780297887920022200002299220000000422222222222000000000000003333333366676666666666666667666366676663
-22222220222222260918190008199180291881920278720000788700000000022222222220000000000000003333333366676666666666666667666366676663
-ff1ff1f08f1f17770995990029555592295555920818180008188180000000000000000000000000000000003333333366667677667766776676666366666663
-0fffff7008fff7572895982082555528825115282222222028999982000000000000000000000000000000003333333366666666666666666666666366666663
-02877777028886668299928028299282285555828299928082988928000000000000000000000000000000003333333336666666666666666666663366676663
-08000000020000002820282082899828828998282820282028000082000000000000000000000000000000003333333333666666666666666666633366676663
-00000000000000007008800780088008a008800a0555555000055000005555000005500000000000000000000000000000000000000000000000000000000000
-00000000070000700888888000899800008998005555555505555550055005500500005000000000000000000000000000000000000000000000000000000000
-000000000088880008799780089aa980089559805555555555500555000000000000000000000000000000000000000000000000000000000000000000000000
-0008700000879800889aa98889a00a98895005985555555505000050000000000000000000000000000000000000000000000000000000000000000000000000
-0007800000897800889aa98889a00a98895005980500005000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000088880008799780089aa980089009800900009000900000000008000000000000000000000000000000000000000000000000000000000000000000
-00000000070000700888888000899800008998000890008000000090080000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000007008800780088008a008800a0080980008000000009000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000222222000021000002222828000000000000000000000000000080005ccccc6522000000000000440000000000000000
-08888800088888000000000000988000299982000222000022222220000000000000000000000000000880002ccccc22cc000000000000440000000000000000
-89999980899999800099800009927800299278552220000022222000000000000000000000000000008888882ccccc22cc000000000000cc0000000000000000
-89999998899999980999780099921855299218552200287022299870000000000000000000000000088888882ccccc22cc000000000000cc0000000000000000
-222222202222222009991855999999552999995522802818299998180000000000000000000000000088888800000000cc000000000000cc0000000000000000
-ffff1f00788f1f7722292220222222202222222022222222222922280000000000000000000000000008800000000000cc000000000000cc0000000000000000
-088fff70788fff752929292029898982298989822989898229282920000000000000000000000000000080000000000022000000000000cc0000000000000000
-02877777728888772228222002222220022222200222222022202220000000000000000000000000000000000000000022000000000000445ccccc6400000000
-08888800008888800000000000000000002222000001000000222200000000000088800000000000000000000000000033555555555555555555533300000000
-89999980689999980000000000000000029999200022200002222220000000000088800000000000000000000000000035ccccccccccccccccccc63300000000
-8888888889999999009990000099990002999920002220000222222000000000008880000000088888888888888000005ccccccccccccccccccccc6300000000
-f22222f088888888099999000999999002999920008280000222222000000000008880000000888888888888888800005ccccccccccccccccccccc6300000000
-0888887077722220099999008999999882999928022222000222222000000000008880000008888888888888888880005ccccccccccccccccccccc6300000000
-0888887076788888829992802899998228999982822222808222222800000000008880000008888000000000088880005ccccccccccccccccccccc6300000000
-0222220066628828289998208289982882899828282228202899998200000000008880000008880000000000008880005cccccc666666666cccccc6300000000
-0000080000000020828082802829928228222282828082808280082800000000008880000008880000000000008880005ccccc63333333335ccccc6300000000
-0888880008888877000000000000000002222220002120000282282000000000008880000008880000000000008880005ccccc63333333335ccccc635ccccc63
-8999998089999987008880000088880029899892002220000222222000000000008880000008888000000000088880005cccccc555555555cccccc635ccccc63
-8999999889999998087878000878878029788792002220000229922000000000008880000008888888888888888880005ccccccccccccccccccccc635ccccc63
-2222222022222226091819000819918029188192027872000078870000000000888888800000888888888888888800005ccccccccccccccccccccc635ccccc63
-ff1ff1f08f1f1777099599008955559829555592081818000818818000000000088888000000088888888888888000005ccccccccccccccccccccc635ccccc63
-0fffff7008fff757829592802855558228511582822222808299992800000000008880000000000000000000000000006ccccccccccccccccccccc635ccccc63
-02877777028886662899982082899828825555282899982028988982000000000008000000000000000000000000000036ccccccccccccccccccc6335ccccc63
+7700007700000000777770000000000000000000000000000089920000222200000000000000004400000000220000000000000000f00000566666555ccccc63
+700000070770077075500000007000700707070700000000082222200072720000000002000000440000000022000000000000000f4400f0c66666cc5c5c5c66
+0000000007000070756700000707070700700070000000000879972099922999002200220000004400000000220000000000000072427f425667665c66666666
+0000000000000000705670000070007007070707000000000899992097927979022902290000004400000000220000000000000007270722c66766cc66666666
+00000000000000007005670000000000000000000000000082222222999229992299229900000044000000002200000000dddd00007f40775666665c66776677
+0000000007000070000056500070007007070707000000008797979297927979979797970000004400000000220000000ddddd5007244270c66666cc66666666
+7000000707700770000005500707070700700070000000008999999299922999999999990000044400000000222000000ddddd50007227006667666666666666
+7700007700000000000000000070007007070707000000008797979299922999979797974444444344444444324444440d55555000077000666766635c5c5c66
+088888000888880000000000000000002222220000021000022228280000000000000000555555530000000035555555006dd500005555000000000033b33b33
+899999808999998000998000009880002999820000222000222222200000000000000000222244450000000052222222065555500d7575d0000000053bbb5bb3
+899999988999999809997800099278002992785502220000222220000000000000000000222222440000000022222222067dd750ddd55ddd005500553bb5bb53
+22222220222222200999185599921855299218552220287022299870000000000000000022222244000000002222222206dddd50d7d57d7d055d055dbb5b5bb5
+ffff1f00788f1f770999990099999955299999552280281829999818000000000000000000000244000000002220000065555555ddd55ddd55dd55dd3b5bbb53
+088fff70788fff752229222022222220222222202222222222292228000000000000000000000044000000002200000067d7d7d5d7d57d7dd7d7d7d7bbb5bbb5
+0287777772888877292829202898989228989892289898922828282000000000000000000000004400000000220000006dddddd5ddd55ddddddddddd33433433
+08008000020020002220222002222220022222200222222022202220000000000000000000000044000000042200000067d7d7d5ddd55dddd7d7d7d733333333
+088888000088888000000000000000000022220000010000002222000000000000000000000000440000000022000000336666666666666666666333333ff333
+89999980689999980000000000000000029999200022200002222220000000000000000000000044000000002200000036666666666666666666663333f44233
+88888888899999990099900000999900029999200022200002222220000000000000000000000044000000002200000066666666666666666666666333f44233
+f22222f088888888099999000999999002999920008280000222222000000000000000000000004400000000220000006666667766776677667666633f444223
+0888887077722220099999002999999222999922022222000222222000000000000000000000004400000000220000006666666666666666666766633f442423
+0888887076788888289998208299992882999928282228202899998200000000000000000000004400000000220000006667666666666666666666633f424423
+022222006662882082999280282992822829928282828280829999280000000000000000000000440000000022000000666766666666666666676663b4b4b24b
+0800000000200000282028208289982882822828282028202820028200000000000000000000004440000000220000006666666333333333666766633bbbbbb3
+08888800088888770000000000000000022222200021200002822820000000000000000000000044555555552200000066666663333333336666666366666663
+89999980899999870088800000888800298998920022200002222220000000000000000000000044222222222200000066666666666666666666666366666663
+89999998899999980878780008788780297887920022200002299220000000000000000000000042222222222200000066676666666666666667666366676663
+22222220222222260918190008199180291881920278720000788700000000000000000000000002222222222000000066676666666666666667666366676663
+ff1ff1f08f1f17770995990029555592295555920818180008188180000000000000000000000000000000000000000066667677667766776676666366666663
+0fffff7008fff7572895982082555528825115282222222028999982000000000000000000000000000000000000000066666666666666666666666366666663
+02877777028886668299928028299282285555828299928082988928000000000000000000000000000000000000000036666666666666666666663366676663
+08000000020000002820282082899828828998282820282028000082000000000000000000000000000000000000000033666666666666666666633366676663
+00899200002222000000000000000000006cc100001111000000000000000000000000007008800780088008a008800a05555550000550000055550000055000
+08222220008282000000000200000000061111100061610000000001000000000700007008888880008998000089980055555555055555500550055005000050
+08899820999229990022002200000000066cc610ccc11ccc00110011000000000088880008799780089aa9800895598055555555555005550000000000000000
+0899992098928989022902290000000006cccc10c6c16c6c011c011c0008700000879800889aa98889a00a988950059855555555050000500000000000000000
+8222222299922999229922990099990061111111ccc11ccc11cc11cc0007800000897800889aa98889a00a988950059805000050000000000000000000000000
+8898989298928989989898980999992066c6c6c1c6c16c6cc6c6c6c6000000000088880008799780089aa9800890098009000090009000000000080000000000
+899999929992299999999999099999206cccccc1ccc11ccccccccccc000000000700007008888880008998000089980008900080000000900800000000000000
+8898989299922999989898980922222066c6c6c1ccc11cccc6c6c6c600000000000000007008800780088008a008800a00809800080000000090000000000000
+0000000000000000000000000000000022222200002100000222282800000000000000000088800000888000000080002200000000000044000000005ccccc65
+088888000888880000000000009880002999820002220000222222200000000000000000008880000088800000088000cc00000000000044000000002ccccc22
+899999808999998000998000099278002992785522200000222220000000000000000000008880000088800000888888cc000000000000cc000000002ccccc22
+899999988999999809997800999218552992185522002870222998700000000000000000008880008888888008888888cc000000000000cc000000002ccccc22
+222222202222222009991855999999552999995522802818299998180000000000000000008880000888880000888888cc000000000000cc0000000000000000
+ffff1f00788f1f7722292220222222202222222022222222222922280000000000000000008880000088800000088000cc000000000000cc0000000000000000
+088fff70788fff752929292029898982298989822989898229282920000000000000000000888000000800000000800022000000000000cc0000000000000000
+02877777728888772228222002222220022222200222222022202220000000000000000000888000000000000000000022000000000000445ccccc6400000000
+08888800008888800000000000000000002222000001000000222200000000000000000000000000000000000000000033555555555555555555533333333333
+89999980689999980000000000000000029999200022200002222220000000000000000000000000000000000000000035ccccccccccccccccccc63333333333
+8888888889999999009990000099990002999920002220000222222000000000000000000000088888888888888000005ccccccccccccccccccccc6333333333
+f22222f088888888099999000999999002999920008280000222222000000000000000000000888888888888888800005ccccccccccccccccccccc6333333333
+0888887077722220099999008999999882999928022222000222222000000000000000000008888888888888888880005ccccccccccccccccccccc6333333333
+0888887076788888829992802899998228999982822222808222222800000000000000000008888000000000088880005ccccccccccccccccccccc6333333333
+0222220066628828289998208289982882899828282228202899998200000000000000000008880000000000008880005cccccc666666666cccccc6333333333
+0000080000000020828082802829928228222282828082808280082800000000000000000008880000000000008880005ccccc63333333335ccccc6333333333
+0888880008888877000000000000000002222220002120000282282000000000000000000008880000000000008880005ccccc63333333335ccccc635ccccc63
+8999998089999987008880000088880029899892002220000222222000000000000000000008888000000000088880005cccccc555555555cccccc635ccccc63
+8999999889999998087878000878878029788792002220000229922000000000000000000008888888888888888880005ccccccccccccccccccccc635ccccc63
+2222222022222226091819000819918029188192027872000078870000000000000000000000888888888888888800005ccccccccccccccccccccc635ccccc63
+ff1ff1f08f1f1777099599008955559829555592081818000818818000000000000000000000088888888888888000005ccccccccccccccccccccc635ccccc63
+0fffff7008fff757829592802855558228511582822222808299992800000000000000000000000000000000000000006ccccccccccccccccccccc635ccccc63
+02877777028886662899982082899828825555282899982028988982000000000000000000000000000000000000000036ccccccccccccccccccc6335ccccc63
 0000800000002000828082802829928228299282828082808200002800000000000000000000000000000000000000003366666666666666666663335ccccc63
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2183,37 +2266,37 @@ ff1ff1f08f1f17770995990089555598295555920818180008188180000000000888880000000888
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-008992000022220000000000000000000000000000000000000000000000000000eeeeeeeeeeeee0000333333333333300111111111111000000000000000000
-08222220007272000000000200000000000000000000000000000000000000000eeee7eeeeeeeeee033333333333337301111111111111100000000000000000
-0879972099922999002200220000000000000000000000000000000000000000ee77eeeeeee222ee073333333333373001111111111111110000000000000000
-0899992097927979022902290000000000000000000000000000000000000000e77e22f2eeefff2e337333333333333011111155555555510000000000000000
-8222222299922999229922990000000000000000000000000000000000000000e7eefff2eeeffffe3333733333733333111555ccccccccc50000000000000000
-8797979297927979979797970000000000000000000000000000000000000000eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c0000000000000000
-8999999299922999999999990000000000000000000000000000000000000000e7ee00ff2ee000feb3f2222fbb322f2015cc222222f222220000000000000000
-8797979299922999979797970000000000000000000000000000000000000000ee2f070f2ef070fef2ff2222ffb222205c2227772ff277720000000000000000
-0000000000000000000000000000000000000000000000000000000000000000ee2f070f2ef000feff2226722222762012f267172ff271720000000000000000
-0000000000000000000000000000000000000000000000000000000000000000ee2f000fffff0f2effff2712fff217202ff226772ff267720000000000000000
-0000000000000000000000000000000000000000000000000000000000000000ee2ff0ffffff0f2e2fff2222fff2222012ff22122fff222f0000000000000000
-00000000000000000000000000000000000000000000000000000000000000000e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff00000000000000000
-00999900000000000000000000000000000000000000000000000000000000000ee2ff11111ff2e002feeeff77ffee200002f2f2ff22fff00000000000000000
-099999200000000000000000000000000000000000000000000000000000000000ee20eeeeef002e002fffff12ffff2000002fffffffff000000000000000000
-0999992000000000000000000000000000000000000000000000000000000000000e2000099fffa000222fff77fff200000222ff1222f0000000000000000000
-092222200000000000000000000000000000000000000000000000000000000000002aafffffffaf02222222222220000022222ff22ff2000000000000000000
-008992000022220000000000006cc1000011110000000000000000000000000000eeeeeeeeeeeee0000333333333333300111111111111000088888888888000
-08222220008282000000000206111110006161000000000100000000000000000eeee7eeeeeeeeee033333333333337301111111111111100288888888888880
-088998209992299900220022066cc610ccc11ccc001100110000000000000000ee77eeeeeee222ee073333333333373001111111111111112888888888828878
-08999920989289890229022906cccc10c6c16c6c011c011c0000000000000000e77e22f2eeefff2e337333333333333011111155555555518788881118882788
-82222222999229992299229961111111ccc11ccc11cc11cc0000000000000000e7eefff2eeeffffe3333733333733333111555ccccccccc58878113331888288
-88989892989289899898989866c6c6c1c6c16c6cc6c6c6c60000000000000000eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
-8999999299922999999999996cccccc1ccc11ccccccccccc0000000000000000e7ee00ff2ee000feb3f2222fbb322f2015cc222222f222228813222ffff28882
-88989892999229999898989866c6c6c1ccc11cccc6c6c6c60000000000000000ee2f070f2ef070fef2ff2222ffb222205c2227772ff2777282226722ff262888
-8888888011111110333333302222222000000000000000000000000000000000ee2f070f2ef000feff2226722222762012f267172ff271728227717fff717288
-899999801dcdcd103bbbbb302aaeaa2000000000000000000000000000000000ee2f000fffff0f2effff2712fff217202ff226772ff267722ff21c7fff1c6228
-899899801cdddc103b333b302aeeea2000000000000000000000000000000000ee2ff0ffffff0f2e2fff2222fff2222012ff22122fff222fffff222fff222ff8
-898989801ddddd103b333b302eaeae20000000000000000000000000000000000e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff02ffffffff2fffff2
-899899801cdddc103b343b302aaeaa20000000000000000000000000000000000ee2ffeeeeeff2e002feeeffffffee200002f2f2ff22fff022ffffffffffff22
-899999801dcdcd103bb4bb302aeaea200000000000000000000000000000000000ee20ffffff002e002fffff22ffff2000002fffffffff00002ffffffffff222
-8888888011111110333333302222222000000000000000000000000000000000000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
+888888803333333000000000000000000000000000000000000000000000000000eeeeeeeeeeeee0000333333333333300111111111111000000000000000000
+899999803bbbbb300000000000000000000000000000000000000000000000000eeee7eeeeeeeeee033333333333337301111111111111100000000000000000
+899899803b333b30000000000000000000000000000000000000000000000000ee77eeeeeee222ee073333333333373001111111111111110000000000000000
+898989803b333b30000000000000000000000000000000000000000000000000e77e22f2eeefff2e337333333333333011111155555555510000000000000000
+899899803b343b30000000000000000000000000000000000000000000000000e7eefff2eeeffffe3333733333733333111555ccccccccc50000000000000000
+899999803bb4bb30000000000000000000000000000000000000000000000000eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c0000000000000000
+8888888033333330000000000000000000000000000000000000000000000000e7ee00ff2ee000feb3f2222fbb322f2015cc222222f222220000000000000000
+0000000000000000000000000000000000000000000000000000000000000000ee2f070f2ef070fef2ff2222ffb222205c2227772ff277720000000000000000
+1111111022222220000000000000000000000000000000000000000000000000ee2f070f2ef000feff2226722222762012f267172ff271720000000000000000
+1dcdcd102aaeaa20000000000000000000000000000000000000000000000000ee2f000fffff0f2effff2712fff217202ff226772ff267720000000000000000
+1cdddc102aeeea20000000000000000000000000000000000000000000000000ee2ff0ffffff0f2e2fff2222fff2222012ff22122fff222f0000000000000000
+1ddddd102eaeae200000000000000000000000000000000000000000000000000e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff00000000000000000
+1cdddc102aaeaa200000000000000000000000000000000000000000000000000ee2ff11111ff2e002feeeff77ffee200002f2f2ff22fff00000000000000000
+1dcdcd102aeaea2000000000000000000000000000000000000000000000000000ee20eeeeef002e002fffff12ffff2000002fffffffff000000000000000000
+1111111022222220000000000000000000000000000000000000000000000000000e2000099fffa000222fff77fff200000222ff1222f0000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000002aafffffffaf02222222222220000022222ff22ff2000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000eeeeeeeeeeeee0000333333333333300111111111111000088888888888000
+00000000000000000000000000000000000000000000000000000000000000000eeee7eeeeeeeeee033333333333337301111111111111100288888888888880
+0000000000000000000000000000000000000000000000000000000000000000ee77eeeeeee222ee073333333333373001111111111111112888888888828878
+0000000000000000000000000000000000000000000000000000000000000000e77e22f2eeefff2e337333333333333011111155555555518788881118882788
+0000000000000000000000000000000000000000000000000000000000000000e7eefff2eeeffffe3333733333733333111555ccccccccc58878113331888288
+0000000000000000000000000000000000000000000000000000000000000000eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
+0000000000000000000000000000000000000000000000000000000000000000e7ee00ff2ee000feb3f2222fbb322f2015cc222222f222228813222ffff28882
+0000000000000000000000000000000000000000000000000000000000000000ee2f070f2ef070fef2ff2222ffb222205c2227772ff2777282226722ff262888
+0000000000000000000000000000000000000000000000000000000000000000ee2f070f2ef000feff2226722222762012f267172ff271728227717fff717288
+0000000000000000000000000000000000000000000000000000000000000000ee2f000fffff0f2effff2712fff217202ff226772ff267722ff21c7fff1c6228
+0000000000000000000000000000000000000000000000000000000000000000ee2ff0ffffff0f2e2fff2222fff2222012ff22122fff222fffff222fff222ff8
+00000000000000000000000000000000000000000000000000000000000000000e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff02ffffffff2fffff2
+00000000000000000000000000000000000000000000000000000000000000000ee2ffeeeeeff2e002feeeffffffee200002f2f2ff22fff022ffffffffffff22
+000000000000000000000000000000000000000000000000000000000000000000ee20ffffff002e002fffff22ffff2000002fffffffff00002ffffffffff222
+0000000000000000000000000000000000000000000000000000000000000000000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
 000000000000000000000000000000000000000000000000000000000000000000002aafffffffaf02222222222220000022222ffffff200000002ffff202020
 __label__
 70000000777070707770077077707770000077707770077007707070777077700770000070707770777070000000000000000000000000000000000000000000
@@ -2346,19 +2429,36 @@ __label__
 000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 __gff__
-00000000000000212121000000000303000000000000002121210100060a1209000000000000002121211111030303000000000000000021212100410303030300000000000000000000000000000000000000000000000000000021212121000000000000000000000000000505050000000000000000000000000005050505
-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000464a52868a920000000000000000000000000000000000000000000000000000
+00000000000000000021212100210303000000000000000000212121060a12090000000000000000002121210303031100000000000000000021212103030303464a5200868a92000000000000000000000000000000000000000000212121210000000000000000000000000505054100000000000000000000000005050505
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
-0000000018080808080828000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00185e08073b3be13b3b29000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-18077fe13be0e23b3b3b09280000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-273b7f2c2d2d2d2d2d2e3b290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-273b7f3f2a2a2a2a2a3f2a290000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-272a7f3f2a2a1f6c6d0e6d5c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-5d7d7e3f3b2a1f7f3b3fe4092800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-273b3b3c3d3d3d0f3d3e3b3b2900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-37173b3b3b3b3b7fe4e5e3193900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-003738383838385b383838390000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+1a0a0a0a0a0a0a0a2a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291d1f1f1f1f1f1d2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f426f406f421f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f1d6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1f1f3f1f1f1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1d1f3f1f1d1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1f1f3f1f1f1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f2f1f3f1f2f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f1f3f1f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+292f1d2f1e2f1d2f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f1f3f1f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f2f1f3f1f2f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1f1f3f1f1f1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1d1f3f1f1d1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f1f1f3f1f1f1f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f1d6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+296f6f6f3f6f6f6f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291f466f446f461f2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+291d1f1f1f1f1f1d2b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+393a3a3a3a3a3a3a3b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 000100001f5201d5600e54005520005200b5000850004500005000250000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
 000200001e63032650076400363001630006301365005630026300263000630006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600
