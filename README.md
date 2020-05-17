@@ -7,7 +7,6 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Long range units
 * Stage 3 AI
  * Use of long range units
  * Better build order decision
@@ -15,12 +14,11 @@ Todo in order
 * Stage 4 AI
  * APC usage
  * Retreating
-* Music
+* Save/load functionality
 * 3 Campaign missions
 * End Turn Transitions
-* Save/load functionality
+* Music
 * Splash screen
-* Make end_turn a coroutine and play an animation 
 * ctrl + f for "refact" comments for refactoring suggestions
 * 8 commanders
 * more campaign missions
@@ -53,6 +51,7 @@ Done
  * Build from cities and bases
 * AI vs AI battles
 * Sort units by y value for drawing
+* Long range units
 
 
 Bugs-to-fix

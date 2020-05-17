@@ -163,7 +163,7 @@ players = {palette_orange, palette_green}
 players_reversed = {}  -- reverse index for getting player index by team
 players_reversed[players[1]] = 1
 players_reversed[players[2]] = 2
-players_human = {true, false}
+players_human = {false, false}
 players_hqs = {}  -- the hqs for the two players
 players_gold = {0, 0}
 turn_i = 1
@@ -203,23 +203,19 @@ function ai_update()
   if players_human[players_turn] then return end  -- don't do ai for humans
 
   -- update ai's units
-  ai_units = {}
-  for u in all(units) do
-    if u.team == players_turn_team then
-      add(ai_units, u)
-    end
-  end
   -- sort units based on infantry/mech type
   ai_units_ranged = {}
   ai_units_infantry = {}
   other_ai_units = {}
-  for u in all(ai_units) do
-    if u.ranged then
-      add(ai_units_ranged, u)
-    elseif u.mobility_type == 0 then
-      add(ai_units_infantry, u)
-    else
-      add(other_ai_units, u)
+  for u in all(units) do
+    if u.team == players_turn_team then
+      if u.ranged then
+        add(ai_units_ranged, u)
+      elseif u.mobility_type == 0 then
+        add(ai_units_infantry, u)
+      else
+        add(other_ai_units, u)
+      end
     end
   end
   ai_units = {}
@@ -262,7 +258,7 @@ function ai_coroutine()
             for u2 in all(ranged_targets) do
               local attack_value = ai_calculate_attack_value(u, u2)
               if attack_value > best_target_value then
-                best_target_value = difference
+                best_target_value = attack_value
                 best_target_u = u2
               end
             end
@@ -294,7 +290,7 @@ function ai_coroutine()
               -- simulate us attacking them and them attacking back
               local attack_value = ai_calculate_attack_value(u, u2, t)
               if attack_value >= 0 and attack_value > best_fight_value then
-                best_fight_value = difference
+                best_fight_value = attack_value
                 best_fight_u = u2
                 best_fight_pos = t
               end
@@ -316,7 +312,7 @@ function ai_coroutine()
           -- pathfind to enemy hq by default
           local goal = players_hqs[3 - players_turn].p
 
-          if ai_pathfinding_h(goal, u.p) < 5 and u.index > 2 then
+          if manhattan_distance(goal, u.p) < 5 and u.index > 2 then
             -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
             goal = players_hqs[players_turn].p
           elseif u.index < 3 then
@@ -324,7 +320,7 @@ function ai_coroutine()
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
-              local d = ai_pathfinding_h(u.p, struct.p)
+              local d = manhattan_distance(u.p, struct.p)
               local unit_at_struct = get_unit_at_pos(struct.p)
               if struct.team ~= players_turn_team and d < nearest_struct_d and 
                   (not unit_at_struct or unit_at_struct.id == u.id or unit_at_struct.team ~= players_turn_team) then
@@ -418,7 +414,7 @@ function ai_pathfinding(unit, target, ignore_enemy_units)
 
   local tiles_to_explore = {}
   local tiles_to_explore = prioqueue.new()
-  tiles_to_explore:add(unit.p, ai_pathfinding_h(unit.p, target)) -- unit position sorted by f_score as starting point
+  tiles_to_explore:add(unit.p, manhattan_distance(unit.p, target)) -- unit position sorted by f_score as starting point
   local current_tile
 
   local to_explore_parents = {}  -- map from point -> parent_point. starting node has no parent ;;
@@ -470,7 +466,7 @@ function ai_pathfinding(unit, target, ignore_enemy_units)
 
           to_explore_parents[t] = current_t
           g_scores[t] = new_g_score
-          local new_f_score = new_g_score + ai_pathfinding_h(t, target)
+          local new_f_score = new_g_score + manhattan_distance(t, target)
 
           -- in the wiki pseudocode it says to record the fscore even if the point is already in the to_explore list
           -- we're not doing that and things seem fine. just keep an eye out if we see weird behavior
@@ -485,7 +481,7 @@ function ai_pathfinding(unit, target, ignore_enemy_units)
   end
 end
 
-function ai_pathfinding_h(p, target)
+function manhattan_distance(p, target)
   return abs(p[1] - target[1]) / 8 + abs(p[2] - target[2]) / 8
 end
 
@@ -571,7 +567,7 @@ function point_closest_to_p(points, p)
   local closest = points[1]
   local closest_d = 32767
   for p2 in all(points) do
-    local d = ai_pathfinding_h(p, p2)
+    local d = manhattan_distance(p, p2)
     if d < closest_d and not get_unit_at_pos(p2) then
       closest = p2
       closest_d = d
@@ -1090,7 +1086,7 @@ function make_selector()
       prompt_text = self.prompt_texts[self.selection_type][prompt]
       if i == self.prompt_selected then 
         bg_color = 14
-        prompt_text ..= "!"
+        prompt_text = prompt_text .. "!"
       end
 
       draw_msg({self.p[1], self.p[2] - y_offset}, prompt_text, bg_color, bg_color == 14)
@@ -1697,7 +1693,7 @@ function make_unit(unit_type_index, p, team)
     if not p then p = self.p end
     for t_y = -self.range_max * 8, self.range_max * 8, 8 do
       for t_x = -self.range_max * 8, self.range_max * 8, 8 do
-        local d = ai_pathfinding_h({p[1] + t_x, p[2] + t_y}, p)
+        local d = manhattan_distance({p[1] + t_x, p[2] + t_y}, p)
         if d >= self.range_min and d <= self.range_max then
           add(tiles, {p[1] + t_x, p[2] + t_y})
         end
@@ -1810,7 +1806,7 @@ function load_string(n)
   local str = ""
   for i = 1, n do
     local charcode_val = chr(peek_increment())
-    str ..= charcode_val
+    str = str .. charcode_val
   end
   -- i don't know what this returns, but it's not a string. that's fine. it works. 
   return str
