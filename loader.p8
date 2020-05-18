@@ -81,8 +81,8 @@ function _init()
   cartdata("picowars") 
 
   local commanders = {
+    make_guster(),
     make_bill(),
-    make_sami(),
   }
   local team_humans = {
     false,
