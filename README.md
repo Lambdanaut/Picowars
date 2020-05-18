@@ -7,14 +7,13 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
+* Music
 * Save/load functionality
 * 3 Campaign missions
-* Music
 * APC
-* Stage 4 AI
- * Retreating
 * Splash screen
 * 8 commanders
+* Better AI so they weigh movement positions based on whether or not they are in attack range of a losing fight
 * more campaign missions
 * multiplayer
 

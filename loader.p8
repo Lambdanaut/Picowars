@@ -81,21 +81,21 @@ function _init()
   cartdata("picowars") 
 
   local commanders = {
+    make_bill(),
     make_sami(),
-    make_sami()
   }
   local team_humans = {
     false,
-    false
+    false 
   }
   local team_indexes = {
-    1,
-    4
+    -- 1,
+    -- 2
   }
 
   -- write all data
   for i=1, 2 do
-    write_co(commanders[i], team_humans[i], team_indexes[i])
+    write_co(commanders[i], team_humans[i])
   end
   write_map(make_map1())
 end
@@ -144,23 +144,85 @@ function make_sami()
   co.units[1].travel += 1
   co.units[2].travel += 1
 
-  -- sami's infantry and mechs have 30% more attack
-  for i=1,2 do
+  -- sami's infantry and mechs have a +5 to their capture rate
+  co.units[1].capture_bonus += 5
+  co.units[2].capture_bonus += 5
+
+  -- sami's infantry and mechs have 25% more attack
+  for i in all({unit_index_infantry, unit_index_mech}) do
     for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
+      co.units[i].damage_chart[j] *= 1.25
     end
   end
 
   -- sami's non-infantry units have 10% less attack
   for i=3,#co.units do
     for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.1
+      co.units[i].damage_chart[j] *= 0.9
     end
   end
 
   return co
-
 end
+
+function make_bill()
+  local co = {}
+
+  co.index = 2
+  co.name = "bill"
+  co.sprite = 236
+  co.team_index = 2  -- blue moon
+
+  co.units = make_units()
+
+  -- bill's non-infantry units have 10% more luck
+  for i=1,#co.units do
+    co.units[i].luck_max = 2
+  end
+
+  return co
+end
+
+function make_guster()
+  local co = {}
+
+  co.index = 3
+  co.name = "guster"
+  co.sprite = 234
+  co.team_index = 3  -- green earth
+
+  co.units = make_units()
+
+  -- guster's ranged units have +1 range
+  co.units[4].range_max += 1
+  co.units[6].range_max += 1
+
+  -- guster's ranged units have 30% more attack
+  for i in all({unit_index_artillery, unit_index_rocket}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- guster's non-ranged, non-infantry units have 10% less attack
+  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 0.9
+    end
+  end
+
+  -- guster's ai prioritizes ranged units
+  co.units[1].ai_unit_ratio = 10
+  co.units[2].ai_unit_ratio = 5
+  co.units[3].ai_unit_ratio = 5
+  co.units[4].ai_unit_ratio = 35
+  co.units[5].ai_unit_ratio = 5
+  co.units[6].ai_unit_ratio = 35
+  co.units[7].ai_unit_ratio = 5
+
+  return co
+end
+
 
 -- unitdata
 function make_units()
@@ -188,6 +250,8 @@ function make_infantry()
   unit.cost = 1
   unit.range_min = 0
   unit.range_max = 0
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_infantry
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_infantry_combat
@@ -214,8 +278,10 @@ function make_mech()
   unit.mobility_type = mobility_mech
   unit.travel = 3
   unit.cost = 3
+  unit.luck_max = 1
   unit.range_min = 0
   unit.range_max = 0
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_mech
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_mech_combat
@@ -244,6 +310,8 @@ function make_recon()
   unit.cost = 4
   unit.range_min = 0
   unit.range_max = 0
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_recon
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_recon_combat
@@ -276,6 +344,8 @@ function make_artillery()
   unit.cost = 6
   unit.range_min = 2
   unit.range_max = 3
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_artillery
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_artillery_combat
@@ -304,6 +374,8 @@ function make_tank()
   unit.cost = 7
   unit.range_min = 0
   unit.range_max = 0
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_tank
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_tank_combat
@@ -332,6 +404,8 @@ function make_rocket()
   unit.cost = 15
   unit.range_min = 3
   unit.range_max = 5
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_rocket
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_rocket_combat
@@ -360,6 +434,8 @@ function make_war_tank()
   unit.cost = 16
   unit.range_min = 0
   unit.range_max = 0
+  unit.luck_max = 1
+  unit.capture_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_war_tank
   unit.moveout_sfx = sfx_war_tank_moveout
   unit.combat_sfx = sfx_war_tank_combat
@@ -416,6 +492,8 @@ function write_unit(u)
   poke_increment(u.cost)
   poke_increment(u.range_min)
   poke_increment(u.range_max)
+  poke_increment(u.luck_max)
+  poke_increment(u.capture_bonus)
   poke_increment(u.ai_unit_ratio)
   poke_increment(u.moveout_sfx)
   poke_increment(u.combat_sfx)
