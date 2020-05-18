@@ -7,16 +7,13 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* APC
-* Stage 4 AI
- * APC usage
- * Retreating
 * Save/load functionality
 * 3 Campaign missions
-* End Turn Transitions
 * Music
+* APC
+* Stage 4 AI
+ * Retreating
 * Splash screen
-* ctrl + f for "refact" comments for refactoring suggestions
 * 8 commanders
 * more campaign missions
 * multiplayer
@@ -52,6 +49,8 @@ Done
 * Stage 3 AI
  * Use of long range units
  * Better build otherder decision
+* End Turn Transitions
+* ctrl + f for "refact" comments for refactoring suggestions
 
 
 Bugs-to-fix

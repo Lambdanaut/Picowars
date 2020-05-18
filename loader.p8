@@ -1,6 +1,14 @@
 pico-8 cartridge // http://www.pico-8.com
 version 23
 __lua__
+-- pico wars
+-- by lambdanaut
+-- https://lambdanaut.itch.io/
+-- https://twitter.com/lambdanaut
+-- thanks to nintendo for making advance wars
+-- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
+
+version = "0.1"
 
 -- mobility ids
 mobility_infantry = 0
@@ -48,17 +56,21 @@ ai_unit_ratio_tank = 14
 ai_unit_ratio_rocket = 15
 ai_unit_ratio_war_tank = 13
 
-
 -- byte constants
 starting_memory = 0x4300
-
--- byte counters
-memory_i = starting_memory
-
+match_result_memory = 0x5ddd
 
 -- globals
 last_checked_time = 0.0
 delta_time = 0.0  -- time since last frame
+memory_i = starting_memory
+
+-- match result globals
+match_result_turn_count = nil
+match_result_p1_unit_count = nil
+match_result_p2_unit_count = nil
+match_result_p1_units_lost = nil
+match_result_p2_units_lost = nil
 
 
 function _init()
@@ -68,21 +80,24 @@ function _init()
   -- setup cartdata
   cartdata("picowars") 
 
-
-  local units = {
-    make_infantry(),
-    make_mech(),
-    make_recon(),
-    make_artillery(),
-    make_tank(),
-    make_rocket(),
-    make_war_tank()
+  local commanders = {
+    make_sami(),
+    make_sami()
+  }
+  local team_humans = {
+    false,
+    false
+  }
+  local team_indexes = {
+    1,
+    4
   }
 
   -- write all data
-  for unit in all(units) do
-    write_unit(unit)
+  for i=1, 2 do
+    write_co(commanders[i], team_humans[i], team_indexes[i])
   end
+  write_map(make_map1())
 end
 
 function _update()
@@ -103,7 +118,63 @@ end
 
 -- dialogue
 
+-- maps
+function make_map1()
+  local m = {}
+
+  m.name = "map1"
+  m.r = {0, 0, 8, 26}
+
+  return m
+end
+
+
+-- commanders
+function make_sami()
+  local co = {}
+
+  co.index = 1
+  co.name = "sami"
+  co.sprite = 238
+  co.team_index = 1  -- orange star
+
+  co.units = make_units()
+
+  -- sami's infantry and mechs travel further
+  co.units[1].travel += 1
+  co.units[2].travel += 1
+
+  -- sami's infantry and mechs have 30% more attack
+  for i=1,2 do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- sami's non-infantry units have 10% less attack
+  for i=3,#co.units do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.1
+    end
+  end
+
+  return co
+
+end
+
 -- unitdata
+function make_units()
+  local units = {
+    make_infantry(),
+    make_mech(),
+    make_recon(),
+    make_artillery(),
+    make_tank(),
+    make_rocket(),
+    make_war_tank()
+  }
+  return units
+end
 
 -- infantry
 function make_infantry()
@@ -315,15 +386,22 @@ function write_string(string, length)
   end
 end
 
-function poke_increment(poke_at)
+function peek_increment()
+  -- peeks at memory_i and increments the global memory_i counter while doing it
+  local v = peek(memory_i)
+  memory_i += 1
+  return v
+end
+
+function poke_increment(poke_value)
   -- pokes at memory_i and increments the global memory_i counter while doing it
-  poke(memory_i, poke_at)
+  poke(memory_i, poke_value)
   memory_i += 1
 end
 
-function poke4_increment(poke_at)
+function poke4_increment(poke_value)
   -- pokes at memory_i and increments the global memory_i counter while doing it
-  poke4(memory_i, poke_at)
+  poke4(memory_i, poke_value)
   memory_i += 4
 end
 
@@ -347,5 +425,32 @@ function write_unit(u)
     poke_increment(attacked_unit_index)
     poke4_increment(damage_val)
   end
+
+end
+
+function write_co(co, human_player, team_index)
+  if not team_index then team_index = co.team_index end
+  if human_player then human_player = 1 else human_player = 0 end
+
+  poke_increment(human_player)
+  write_string(co.name, 10)
+  poke_increment(team_index)
+  poke_increment(co.sprite)
+
+  for unit in all(co.units) do
+    write_unit(unit)
+  end
+end
+
+function write_map(m)
+  -- write out the map's bounds to memory
+  for i=1,4 do
+    poke_increment(m.r[i])
+  end
+end
+
+
+function read_match_result()
+  
 
 end
