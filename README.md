@@ -7,14 +7,14 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
+* Splash screen
 * Music
 * Save/load functionality
 * 3 Campaign missions
-* APC
-* Splash screen
-* 8 commanders
+* Unlockable commanders
 * Better AI so they weigh movement positions based on whether or not they are in attack range of a losing fight
 * more campaign missions
+* APC
 * multiplayer
 
 

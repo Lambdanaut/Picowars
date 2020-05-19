@@ -46,6 +46,11 @@ sfx_war_tank_combat = 26
 sfx_artillery_combat = 27
 sfx_rocket_combat = 28
 
+-- music
+team_index_to_music = {
+  0, 0, 0, 0
+}
+
 -- ai unit ratios
 -- must add up to 100
 ai_unit_ratio_infantry = 15
@@ -85,7 +90,7 @@ function _init()
     make_sami(),
   }
   local team_humans = {
-    false,
+    true,
     false 
   }
   local team_indexes = {
@@ -139,6 +144,7 @@ function make_sami()
   co.name = "sami"
   co.sprite = 238
   co.team_index = 1  -- orange star
+  co.music = team_index_to_music[co.team_index]
 
   co.units = make_units()
 
@@ -150,10 +156,10 @@ function make_sami()
   co.units[1].capture_bonus += 5
   co.units[2].capture_bonus += 5
 
-  -- sami's infantry and mechs have 25% more attack
+  -- sami's infantry and mechs have 30% more attack
   for i in all({unit_index_infantry, unit_index_mech}) do
     for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.25
+      co.units[i].damage_chart[j] *= 1.3
     end
   end
 
@@ -174,6 +180,7 @@ function make_bill()
   co.name = "bill"
   co.sprite = 236
   co.team_index = 2  -- blue moon
+  co.music = team_index_to_music[co.team_index]
 
   co.units = make_units()
 
@@ -192,6 +199,7 @@ function make_guster()
   co.name = "guster"
   co.sprite = 234
   co.team_index = 3  -- green earth
+  co.music = team_index_to_music[co.team_index]
 
   co.units = make_units()
 
@@ -228,10 +236,11 @@ end
 function make_slydy()
   local co = {}
 
-  co.index = 2
+  co.index = 4
   co.name = "slydy"
   co.sprite = 232
   co.team_index = 4  -- pink groove
+  co.music = team_index_to_music[co.team_index]
 
   co.units = make_units()
 
@@ -532,6 +541,7 @@ function write_co(co, human_player, team_index)
   write_string(co.name, 10)
   poke_increment(team_index)
   poke_increment(co.sprite)
+  poke_increment(co.music)
 
   for unit in all(co.units) do
     write_unit(unit)
