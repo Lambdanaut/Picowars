@@ -50,3 +50,35 @@ The below are notes for my use during development.
 -- currently_attacking = false
 -- attack_coroutine_u1 = nil
 -- attack_coroutine_u2 = nil
+
+
+
+
+-- selector variables
+  -- selector_selecting = false
+
+  -- selection types are:
+  -- unit selection: 0
+  -- unit movement: 1
+  -- unit order prompt: 2
+  -- unit attack prompt: 3
+  -- menu prompt for ending turn: 4
+  -- unit attack range selection: 5
+  -- enemy unit movement range selection: 6
+  -- unit attacking: 7
+  -- constructing unit: 8
+  -- selector_selection_type = nil
+
+  -- currently selected object
+  -- selector_selection = nil
+
+
+  -- during a prompt, prompt_options will be populated with options
+  -- for unit prompt:
+  -- 1 = rest
+  -- 2 = attack
+  -- 3 = capture
+  -- for attack prompt:
+  --   each index is an index into selector_attack_targets
+  -- for menu prompt:
+  -- 1 = end turn

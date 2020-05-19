@@ -153,8 +153,6 @@ function end_game(reason)
   load("loader.p8")
 end
 function end_turn()
-  sfx(7)
-
   -- change team's turn
   players_turn = players_turn % 2 + 1
   players_turn_team = players[players_turn]
@@ -676,6 +674,8 @@ end
 end_turn_coroutine = function()
   end_turn_timer = 0
 
+  sfx(7)
+
   while end_turn_timer < 1.5 and not debug do
     set_palette(players_turn_team)
     rectfill(cam.p[1], cam.p[2] + 51, cam.p[1] + 128, cam.p[2] + 76, 9)
@@ -720,25 +720,7 @@ end
 function selector_init()
   selector_p = selector_p or {0, 0}
 
-
   selector_time_since_last_move = 0
-
-  -- selector_selecting = false
-
-  -- selection types are:
-  -- unit selection: 0
-  -- unit movement: 1
-  -- unit order prompt: 2
-  -- unit attack prompt: 3
-  -- menu prompt for ending turn: 4
-  -- unit attack range selection: 5
-  -- enemy unit movement range selection: 6
-  -- unit attacking: 7
-  -- constructing unit: 8
-  -- selector_selection_type = nil
-
-  -- currently selected object
-  -- selector_selection = nil
 
   -- movable tiles for selected unit
   selector_movable_tiles = {}
@@ -746,15 +728,6 @@ function selector_init()
   -- tiles that a movement arrow has passed through, in order from first to last
   selector_arrowed_tiles = {}
 
-  -- during a prompt, prompt_options will be populated with options
-  -- for unit prompt:
-  -- 1 = rest
-  -- 2 = attack
-  -- 3 = capture
-  -- for attack prompt:
-  --   each index is an index into selector_attack_targets
-  -- for menu prompt:
-  -- 1 = end turn
   selector_prompt_selected = 1
   selector_prompt_options = {}
   selector_prompt_options_disabled = {} -- will appear marked out as disabled
@@ -1813,21 +1786,18 @@ end
 
 -- save/loading data functions
 function peek_increment()
-  -- peeks at memory_i and increments the global memory_i counter while doing it
   local v = peek(memory_i)
   memory_i += 1
   return v
 end
 
 function poke_increment(poke_value)
-  -- pokes at memory_i and increments the global memory_i counter while doing it
   poke(memory_i, poke_value)
   memory_i += 1
 end
 
 function load_string(n)
   -- reads a string from memory and increments the memory_i counter by its length
-  if not n then n = 20 end  -- string default length
   local str = ""
   for i = 1, n do
     local charcode_val = chr(peek_increment())
@@ -2018,7 +1988,6 @@ function outline_sprite(n,col_outline,x,y,flip_x,sprite_palette)
       spr(n,x+xx,y+yy,1,1,flip_x,flip_y)
     end
   end
-  -- reset palette
   pal()
   -- draw final sprite
   set_palette(sprite_palette)
@@ -2054,14 +2023,14 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
 end
 
 function get_tile_adjacents(p)
-    return {{p[1], p[2] - 8},  -- north
-     {p[1], p[2] + 8},  -- south
-     {p[1] + 8, p[2]},  -- east
-     {p[1] - 8, p[2]}}   -- west
+    return {{p[1], p[2] - 8},
+     {p[1], p[2] + 8},
+     {p[1] + 8, p[2]},
+     {p[1] - 8, p[2]}}
 end
 
 -- priority queue code
--- code edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
+-- edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
 prioqueue = {}
 prioqueue.__index = prioqueue
 
