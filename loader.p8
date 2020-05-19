@@ -82,7 +82,7 @@ function _init()
 
   local commanders = {
     make_guster(),
-    make_bill(),
+    make_sami(),
   }
   local team_humans = {
     false,
@@ -95,7 +95,7 @@ function _init()
 
   -- write all data
   for i=1, 2 do
-    write_co(commanders[i], team_humans[i])
+    write_co(commanders[i], team_humans[i], team_indexes[i])
   end
   write_map(make_map1())
 end
@@ -105,9 +105,11 @@ function _update()
   delta_time = t - last_checked_time
   last_checked_time = t
 
-  if (btnp(4)) then 
+  -- if (btnp(4)) then 
+  if t > 0.1 then
     load_game()
   end
+  -- end
 end
 
 function load_game()
@@ -223,6 +225,22 @@ function make_guster()
   return co
 end
 
+function make_slydy()
+  local co = {}
+
+  co.index = 2
+  co.name = "slydy"
+  co.sprite = 232
+  co.team_index = 4  -- pink groove
+
+  co.units = make_units()
+
+  -- slidy's infantry and mech have a different sprite
+  co.units[1].sprite = 23
+  co.units[2].sprite = 24
+
+  return co
+end
 
 -- unitdata
 function make_units()
