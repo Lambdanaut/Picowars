@@ -89,7 +89,7 @@ memory_i = 0x4300 -- counter to determine where we are in reading from memory
 
 function _init()
   -- add menu item to return to loader
-  menuitem(1, "abandon mission", function() end_game(1) end)
+  menuitem(1, "abandon mission", function() end_game(3) end)
 
   load_assets()
   current_map:load()
@@ -189,11 +189,13 @@ turn_i = 0
 function end_game(reason)
   -- end the game
   -- reasons:
-  -- * 1: abandon mission
-  -- * 2: victory/defeat
+  -- * 1: victory player 1
+  -- * 2: victory player 2
+  -- * 3: abandon mission
 
   -- write match result to memory
   memory_i = 0x5ddd -- beginning of match result memory
+  poke_increment(reason)
   for i = 1, 2 do
     poke_increment(players_units_lost[i])
     poke_increment(players_units_built[i])
@@ -1503,7 +1505,7 @@ function make_structure(struct_type, p, team)
       self.capture_left = 20
       if self.type == 1 then
         -- hq captured; end game
-        end_game()
+        end_game(players_turn)
       end
     else
       sfx(9)

@@ -90,7 +90,7 @@ function _init()
     make_sami(),
   }
   local team_humans = {
-    true,
+    false,
     false 
   }
   local team_indexes = {
