@@ -244,26 +244,26 @@ function make_sami()
   co.units = make_units()
 
   -- sami's infantry and mechs travel further
-  co.units[1].travel += 1
-  co.units[2].travel += 1
+  -- co.units[1].travel += 1
+  -- co.units[2].travel += 1
 
-  -- sami's infantry and mechs have a +5 to their capture rate
-  co.units[1].capture_bonus += 5
-  co.units[2].capture_bonus += 5
+  -- -- sami's infantry and mechs have a +5 to their capture rate
+  -- co.units[1].capture_bonus += 5
+  -- co.units[2].capture_bonus += 5
 
-  -- sami's infantry and mechs have 30% more attack
-  for i in all({unit_index_infantry, unit_index_mech}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
+  -- -- sami's infantry and mechs have 30% more attack
+  -- for i in all({unit_index_infantry, unit_index_mech}) do
+  --   for j=1,#co.units[i].damage_chart do
+  --     co.units[i].damage_chart[j] *= 1.3
+  --   end
+  -- end
 
-  -- sami's non-infantry units have 10% less attack
-  for i=3,#co.units do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
+  -- -- sami's non-infantry units have 10% less attack
+  -- for i=3,#co.units do
+  --   for j=1,#co.units[i].damage_chart do
+  --     co.units[i].damage_chart[j] *= 0.9
+  --   end
+  -- end
 
   return co
 end
