@@ -19,6 +19,7 @@ mobility_treads = 3
 unit_infantry = "infantry"
 unit_mech = "mech"
 unit_recon = "recon"
+unit_apc = "apc"
 unit_artillery = "artillery"
 unit_tank = "tank"
 unit_rocket = "rocket"
@@ -27,10 +28,11 @@ unit_war_tank = "war tank"
 unit_index_infantry = 1
 unit_index_mech = 2
 unit_index_recon = 3
-unit_index_artillery = 4
-unit_index_tank = 5
-unit_index_rocket = 6
-unit_index_war_tank = 7
+unit_index_apc = 4
+unit_index_artillery = 5
+unit_index_tank = 6
+unit_index_rocket = 7
+unit_index_war_tank = 8
 
 
 -- sfx
@@ -48,7 +50,7 @@ sfx_rocket_combat = 28
 
 -- music
 team_index_to_music = {
-  0, 0, 0, 0
+  31, 0, 0, 0
 }
 
 -- team icons
@@ -58,13 +60,14 @@ team_index_to_team_icon = {
 
 -- ai unit ratios
 -- must add up to 100
-ai_unit_ratio_infantry = 15
-ai_unit_ratio_mech = 15
-ai_unit_ratio_recon = 14
-ai_unit_ratio_artillery = 14
-ai_unit_ratio_tank = 14
-ai_unit_ratio_rocket = 15
-ai_unit_ratio_war_tank = 13
+ai_unit_ratio_infantry = 14
+ai_unit_ratio_mech = 14
+ai_unit_ratio_recon = 13
+ai_unit_ratio_apc = 10
+ai_unit_ratio_artillery = 13
+ai_unit_ratio_tank = 13
+ai_unit_ratio_rocket = 12
+ai_unit_ratio_war_tank = 11
 
 -- byte constants
 starting_memory = 0x4300
@@ -92,12 +95,12 @@ function _init()
   make_commanders()
 
   local game_commanders = {
-    make_conrad(),
-    make_andrew(),
+    make_sami(),
+    make_alecia(),
   }
   local team_humans = {
-    false,
-    false 
+    true,
+    false
   }
   local team_indexes = {
     -- 1,
@@ -109,7 +112,7 @@ function _init()
   for i=1, 2 do
     write_co(game_commanders[i], team_humans[i], team_indexes[i])
   end
-  write_map(make_map1())
+  write_map(make_map2())
 
   -- load save
   write_save()
@@ -144,12 +147,26 @@ function make_map1()
   local m = {}
 
   m.name = "map1"
-  m.r = {0, 0, 8, 26}
+  m.r = {0, 0, 14, 21}
+  m.bg_color = 12
+
+  -- should we load the map from a source other than the engine?
+  -- 0=false, 1=load from this map, 2=load from secondary map source
+  m.load_external = 0
+
+  return m
+end
+
+function make_map2()
+  local m = {}
+
+  m.name = "map2"
+  m.r = {18, 0, 15, 12}
   m.bg_color = 3
 
   -- should we load the map from a source other than the engine?
   -- 0=false, 1=load from this map, 2=load from secondary map source
-  m.load_external = 1
+  m.load_external = 0
 
   return m
 end
@@ -264,6 +281,21 @@ function make_bill()
   return co
 end
 
+function make_alecia()
+  local co = {}
+
+  co.name = "alecia"
+  co.sprite = 206
+  co.team_index = 2
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  return co
+end
+
 function make_conrad()
   local co = {}
 
@@ -320,13 +352,14 @@ function make_guster()
   end
 
   -- guster's ai prioritizes ranged units
-  co.units[1].ai_unit_ratio = 10
-  co.units[2].ai_unit_ratio = 5
-  co.units[3].ai_unit_ratio = 5
-  co.units[4].ai_unit_ratio = 35
-  co.units[5].ai_unit_ratio = 5
-  co.units[6].ai_unit_ratio = 35
-  co.units[7].ai_unit_ratio = 5
+  co.units[unit_index_infantry].ai_unit_ratio = 10
+  co.units[unit_index_mech].ai_unit_ratio = 5
+  co.units[unit_index_recon].ai_unit_ratio = 5
+  co.units[unit_index_apc].ai_unit_ratio = 6
+  co.units[unit_index_artillery].ai_unit_ratio = 32
+  co.units[unit_index_tank].ai_unit_ratio = 5
+  co.units[unit_index_rocket].ai_unit_ratio = 32
+  co.units[unit_index_war_tank].ai_unit_ratio = 5
 
   return co
 end
@@ -343,10 +376,6 @@ function make_slydy()
 
   co.units = make_units()
 
-  -- slidy's infantry and mech have a different sprite
-  co.units[1].sprite = 23
-  co.units[2].sprite = 24
-
   return co
 end
 
@@ -356,6 +385,7 @@ function make_units()
     make_infantry(),
     make_mech(),
     make_recon(),
+    make_apc(),
     make_artillery(),
     make_tank(),
     make_rocket(),
@@ -382,11 +412,13 @@ function make_infantry()
   unit.ai_unit_ratio = ai_unit_ratio_infantry
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_infantry_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 5.5
   dc[unit_index_mech] = 4.5
   dc[unit_index_recon] = 1.2
+  dc[unit_index_apc] = 1.4
   dc[unit_index_artillery] = 1.5
   dc[unit_index_tank] = 0.5
   dc[unit_index_rocket] = 2.5
@@ -413,11 +445,13 @@ function make_mech()
   unit.ai_unit_ratio = ai_unit_ratio_mech
   unit.moveout_sfx = sfx_infantry_moveout
   unit.combat_sfx = sfx_mech_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 6.5
   dc[unit_index_mech] = 5.5
   dc[unit_index_recon] = 8.5
+  dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -444,6 +478,7 @@ function make_recon()
   unit.ai_unit_ratio = ai_unit_ratio_recon
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_recon_combat
+  unit.is_carrier = false
 
   -- just a bit stronger vs lighter units than advance wars 2 recon because fog of war is removed.
   -- made into a true anti-infantry unit
@@ -453,10 +488,44 @@ function make_recon()
   dc[unit_index_infantry] = 7.6
   dc[unit_index_mech] = 6.8
   dc[unit_index_recon] = 3.8
+  dc[unit_index_apc] = 4.5
   dc[unit_index_artillery] = 4.5
   dc[unit_index_tank] = 0.6
   dc[unit_index_rocket] = 5.5
   dc[unit_index_war_tank] = 0.1
+  unit.damage_chart = dc
+
+  return unit
+end
+
+function make_apc()
+  local unit = {}
+
+  unit.index = unit_index_apc
+  unit.type = unit_apc
+  unit.sprite = 23
+  unit.mobility_type = mobility_treads
+  unit.travel = 7
+  unit.cost = 5
+  unit.range_min = 0
+  unit.range_max = 0
+  unit.luck_max = 1
+  unit.capture_bonus = 0
+  unit.struct_heal_bonus = 0
+  unit.ai_unit_ratio = ai_unit_ratio_apc
+  unit.moveout_sfx = sfx_tank_moveout
+  unit.combat_sfx = 0  -- no combat
+  unit.is_carrier = true
+
+  dc = {}
+  dc[unit_index_infantry] = 0
+  dc[unit_index_mech] = 0
+  dc[unit_index_recon] = 0
+  dc[unit_index_apc] = 0
+  dc[unit_index_artillery] = 0
+  dc[unit_index_tank] = 0
+  dc[unit_index_rocket] = 0
+  dc[unit_index_war_tank] = 0
   unit.damage_chart = dc
 
   return unit
@@ -479,11 +548,13 @@ function make_artillery()
   unit.ai_unit_ratio = ai_unit_ratio_artillery
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_artillery_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 9
   dc[unit_index_mech] = 8.5
   dc[unit_index_recon] = 8
+  dc[unit_index_apc] = 7
   dc[unit_index_artillery] = 7.5
   dc[unit_index_tank] = 7
   dc[unit_index_rocket] = 8
@@ -510,11 +581,13 @@ function make_tank()
   unit.ai_unit_ratio = ai_unit_ratio_tank
   unit.moveout_sfx = sfx_tank_moveout
   unit.combat_sfx = sfx_tank_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 3.5
   dc[unit_index_mech] = 3.0
   dc[unit_index_recon] = 8.5
+  dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7.0
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -541,11 +614,13 @@ function make_rocket()
   unit.ai_unit_ratio = ai_unit_ratio_rocket
   unit.moveout_sfx = sfx_recon_moveout
   unit.combat_sfx = sfx_rocket_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 9.5
   dc[unit_index_mech] = 9
   dc[unit_index_recon] = 9
+  dc[unit_index_apc] = 8
   dc[unit_index_artillery] = 8
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 8.5
@@ -572,11 +647,13 @@ function make_war_tank()
   unit.ai_unit_ratio = ai_unit_ratio_war_tank
   unit.moveout_sfx = sfx_war_tank_moveout
   unit.combat_sfx = sfx_war_tank_combat
+  unit.is_carrier = false
 
   dc = {}
   dc[unit_index_infantry] = 10.5
   dc[unit_index_mech] = 9.5
   dc[unit_index_recon] = 10.5
+  dc[unit_index_apc] = 10.5
   dc[unit_index_artillery] = 10.5
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 10.5
@@ -637,10 +714,10 @@ function write_unit(u)
   poke_increment(u.ai_unit_ratio)
   poke_increment(u.moveout_sfx)
   poke_increment(u.combat_sfx)
+  if u.is_carrier then poke_increment(1) else poke_increment(0) end
 
   -- damage chart
   for attacked_unit_index, damage_val in pairs(u.damage_chart) do
-    poke_increment(attacked_unit_index)
     poke4_increment(damage_val)
   end
 

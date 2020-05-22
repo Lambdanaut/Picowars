@@ -82,3 +82,9 @@ The below are notes for my use during development.
   --   each index is an index into selector_attack_targets
   -- for menu prompt:
   -- 1 = end turn
+
+
+-- Music making notes
+  -- 1: pitch slide at beginning of note. keep this effect between notes that are close to each other. (A and B, NOT B and C)
+  -- 2: vibrato at the end of a note to give it some wave before the next note
+  -- 3:
