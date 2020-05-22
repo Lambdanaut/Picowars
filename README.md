@@ -10,6 +10,7 @@ Todo in order
 * For Demo 1
  * Splash screen
  * Music for Blue Moon and Orange Star
+ * Publish, upload, and share
 * For Demo 2 (Splore)
  * APC
  * Fill map space with maps

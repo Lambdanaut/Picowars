@@ -19,7 +19,7 @@ mobility_treads = 3
 unit_infantry = "infantry"
 unit_mech = "mech"
 unit_recon = "recon"
-unit_apc = "apc"
+-- unit_apc = "apc"
 unit_artillery = "artillery"
 unit_tank = "tank"
 unit_rocket = "rocket"
@@ -28,11 +28,11 @@ unit_war_tank = "war tank"
 unit_index_infantry = 1
 unit_index_mech = 2
 unit_index_recon = 3
-unit_index_apc = 4
-unit_index_artillery = 5
-unit_index_tank = 6
-unit_index_rocket = 7
-unit_index_war_tank = 8
+-- unit_index_apc = 4
+unit_index_artillery = 4
+unit_index_tank = 5
+unit_index_rocket = 6
+unit_index_war_tank = 7
 
 
 -- sfx
@@ -99,7 +99,7 @@ function _init()
     make_alecia(),
   }
   local team_humans = {
-    false,
+    true,
     false
   }
   local team_indexes = {
@@ -382,7 +382,7 @@ function make_guster()
   co.units[unit_index_infantry].ai_unit_ratio = 10
   co.units[unit_index_mech].ai_unit_ratio = 5
   co.units[unit_index_recon].ai_unit_ratio = 5
-  co.units[unit_index_apc].ai_unit_ratio = 6
+  -- co.units[unit_index_apc].ai_unit_ratio = 6
   co.units[unit_index_artillery].ai_unit_ratio = 32
   co.units[unit_index_tank].ai_unit_ratio = 5
   co.units[unit_index_rocket].ai_unit_ratio = 32
@@ -412,7 +412,7 @@ function make_units()
     make_infantry(),
     make_mech(),
     make_recon(),
-    make_apc(),
+    -- make_apc(),
     make_artillery(),
     make_tank(),
     make_rocket(),
@@ -445,7 +445,7 @@ function make_infantry()
   dc[unit_index_infantry] = 5.5
   dc[unit_index_mech] = 4.5
   dc[unit_index_recon] = 1.2
-  dc[unit_index_apc] = 1.4
+  -- dc[unit_index_apc] = 1.4
   dc[unit_index_artillery] = 1.5
   dc[unit_index_tank] = 0.5
   dc[unit_index_rocket] = 2.5
@@ -478,7 +478,7 @@ function make_mech()
   dc[unit_index_infantry] = 6.5
   dc[unit_index_mech] = 5.5
   dc[unit_index_recon] = 8.5
-  dc[unit_index_apc] = 7.5
+  -- dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -515,7 +515,7 @@ function make_recon()
   dc[unit_index_infantry] = 7.6
   dc[unit_index_mech] = 6.8
   dc[unit_index_recon] = 3.8
-  dc[unit_index_apc] = 4.5
+  -- dc[unit_index_apc] = 4.5
   dc[unit_index_artillery] = 4.5
   dc[unit_index_tank] = 0.6
   dc[unit_index_rocket] = 5.5
@@ -548,7 +548,7 @@ function make_apc()
   dc[unit_index_infantry] = 0
   dc[unit_index_mech] = 0
   dc[unit_index_recon] = 0
-  dc[unit_index_apc] = 0
+  -- dc[unit_index_apc] = 0
   dc[unit_index_artillery] = 0
   dc[unit_index_tank] = 0
   dc[unit_index_rocket] = 0
@@ -581,7 +581,7 @@ function make_artillery()
   dc[unit_index_infantry] = 9
   dc[unit_index_mech] = 8.5
   dc[unit_index_recon] = 8
-  dc[unit_index_apc] = 7
+  -- dc[unit_index_apc] = 7
   dc[unit_index_artillery] = 7.5
   dc[unit_index_tank] = 7
   dc[unit_index_rocket] = 8
@@ -614,7 +614,7 @@ function make_tank()
   dc[unit_index_infantry] = 3.5
   dc[unit_index_mech] = 3.0
   dc[unit_index_recon] = 8.5
-  dc[unit_index_apc] = 7.5
+  -- dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7.0
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -647,7 +647,7 @@ function make_rocket()
   dc[unit_index_infantry] = 9.5
   dc[unit_index_mech] = 9
   dc[unit_index_recon] = 9
-  dc[unit_index_apc] = 8
+  -- dc[unit_index_apc] = 8
   dc[unit_index_artillery] = 8
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 8.5
@@ -680,7 +680,7 @@ function make_war_tank()
   dc[unit_index_infantry] = 10.5
   dc[unit_index_mech] = 9.5
   dc[unit_index_recon] = 10.5
-  dc[unit_index_apc] = 10.5
+  -- dc[unit_index_apc] = 10.5
   dc[unit_index_artillery] = 10.5
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 10.5
