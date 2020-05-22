@@ -1,16 +1,9 @@
-pico-8 cartridge // http://www.pico-8.com
+﻿pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
--- pico wars
--- by lambdanaut
--- https://lambdanaut.itch.io/
--- https://twitter.com/lambdanaut
--- thanks to nintendo for making advance wars
--- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
 
 debug = false
 
--- palettes
 
 palette_orange = "orange star★"
 palette_blue = "blue moon●"
@@ -26,10 +19,8 @@ team_index_to_palette = {
 
 team_icon = {}
 
--- saves a couple tokens
 local dead_str = 'dead'
 
--- globals
 last_checked_time = 0.0
 delta_time = 0.0
 unit_id_i = 0
@@ -41,8 +32,8 @@ map_index_selected = 1
 
 
 function _init()
-  -- add menu item to return to loader
-  menuitem(1, "abandon mission", function() end_game(3) end)
+ 
+  -- menuitem(1, "abandon mission", function() end_game(3) end)
 
   load_assets()
 end
@@ -89,11 +80,11 @@ function _update()
 end
 
 function _draw()
-  -- clear screen
+ 
   cls()
 
   if in_splash_screen then
-    -- set initial background color
+   
     rectfill(0, 0, 1000, 1000, 9)
     print("== picowars v0.1 ==",24, 38, 0)
     print("== closed beta ==", 28, 45, 0)
@@ -107,15 +98,15 @@ function _draw()
       structure:draw()
     end
 
-    -- draw tips of hqs
+   
     for i = 1, 2 do
       local hq = players_hqs[i]
       set_palette(hq.team)
-      spr(67, hq.p[1], hq.p[2] - 11) -- draw the spire of an hq
+      spr(67, hq.p[1], hq.p[2] - 11)
       pal()
     end
     
-    -- sort units by their y position for drawing
+   
     sort_table_by_f(units, function(u1, u2) return u1.p[2] > u2.p[2] end)
     for unit in all(units) do
       unit:draw()
@@ -123,7 +114,7 @@ function _draw()
 
     selector_draw()
 
-    -- run end_turn coroutine thread
+   
     if active_end_turn_coroutine and costatus(active_end_turn_coroutine) == dead_str then
       active_end_turn_coroutine = nil
     elseif active_end_turn_coroutine then
@@ -136,12 +127,11 @@ function _draw()
   end
 end
 
--- lvl manager code
 players_turn = 0
 players = {}
 players_human = {}
 players_co_name = {}
-players_hqs = {}  -- the hqs for the two players
+players_hqs = {} 
 players_gold = {0, 0}
 players_units_lost = {0, 0}
 players_units_built = {0, 0}
@@ -151,14 +141,14 @@ players_co_icon = {}
 units = {}
 turn_i = 0
 function end_game(reason)
-  -- end the game
-  -- reasons:
-  -- * 1: victory player 1
-  -- * 2: victory player 2
-  -- * 3: abandon mission
+ 
+ 
+ 
+ 
+ 
 
-  -- write match result to memory
-  memory_i = 0x5ddd -- beginning of match result memory
+ 
+  memory_i = 0x5ddd
   poke_increment(reason)
   for i = 1, 2 do
     poke_increment(players_units_lost[i])
@@ -169,17 +159,17 @@ function end_game(reason)
   load("loader.p8")
 end
 function end_turn()
-  -- change team's turn
+ 
   players_turn = players_turn % 2 + 1
   players_turn_team = players[players_turn]
 
-  -- increment the turn count
+ 
   turn_i += 1
 
   for unit in all(units) do
     unit.is_resting = false
 
-    -- heal all units on cities
+   
     local struct = get_struct_at_pos(unit.p, players_turn_team)
     if unit.team == players_turn_team and struct then
       unit.hp = min(unit.hp + 2 + unit.struct_heal_bonus, 10)
@@ -188,24 +178,23 @@ function end_turn()
 
   for struct in all(structures) do
     if struct.team == players_turn_team then
-      -- add income for each city
+     
       players_gold[players_turn] += 1
     end
   end
 
   selector_p = players_hqs[players_turn].p
 
-  -- create end_turn animation coroutine
+ 
   active_end_turn_coroutine = cocreate(end_turn_coroutine)
 
 end
 
--- ai code
 function ai_update()
-  if players_human[players_turn] then return end  -- don't do ai for humans
+  if players_human[players_turn] then return end 
 
-  -- update ai's units
-  -- sort units based on infantry/mech type
+ 
+ 
   ai_units_ranged = {}
   ai_units_infantry = {}
   other_ai_units = {}
@@ -221,11 +210,11 @@ function ai_update()
     end
   end
   ai_units = {}
-  merge_tables(ai_units, ai_units_ranged)  -- move ranged first
-  merge_tables(ai_units, ai_units_infantry)  -- then infantry
-  merge_tables(ai_units, other_ai_units)  -- then other units
+  merge_tables(ai_units, ai_units_ranged) 
+  merge_tables(ai_units, ai_units_infantry) 
+  merge_tables(ai_units, other_ai_units) 
 
-  -- run primary coroutine thread
+ 
   if not active_ai_coroutine then
     active_ai_coroutine = cocreate(ai_coroutine)
   elseif costatus(active_ai_coroutine) == dead_str then
@@ -237,25 +226,25 @@ function ai_update()
 end
 
 function ai_coroutine()
-  -- 3 waves of passing through our units
+ 
 
   for i = 1, 3 do
     for u in all(ai_units) do 
       if u.active and not u.is_resting then
-        -- get unit's movable tiles
+       
         local unit_movable_tiles = u:get_movable_tiles()[1]
         add(unit_movable_tiles, u.p)
 
         local has_attacked
 
-        -- determine if there are any good fights to have within our range
+       
         if u.ranged then
-          -- ranged attack
+         
           local ranged_targets = u:targets()
 
           if #ranged_targets > 0 then
             local best_target_u
-            local best_target_value = -32767  -- start at negative infinity
+            local best_target_value = -32767 
             for u2 in all(ranged_targets) do
               local attack_value = ai_calculate_attack_value(u, u2)
               if attack_value > best_target_value then
@@ -272,24 +261,24 @@ function ai_coroutine()
             end
           end
         elseif (u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team)) then
-          -- if we're not an infantry or we're an infantry that's not capturing, look for the best melee attack we can make
-          -- melee attacks
+         
+         
           local attackables = {}
 
-          -- get the positions we can attack enemies from
-          -- map of tile_p => attackable enemy unit from that position 
+         
+         
           for t in all(unit_movable_tiles) do
             attackables[t] = u:targets(t)
           end
 
-          -- determine best fight to take
+         
           local best_fight_u
           local best_fight_pos
-          local best_fight_value = -32767  -- start at negative infinity
+          local best_fight_value = -32767 
 
           for t, attackable_unit in pairs(attackables) do
             for u2 in all(attackable_unit) do
-              -- simulate us attacking them and them attacking back
+             
               local attack_value = ai_calculate_attack_value(u, u2, t)
               if attack_value >= 0 and attack_value > best_fight_value then
                 best_fight_value = attack_value
@@ -300,7 +289,7 @@ function ai_coroutine()
           end
 
           if best_fight_pos then
-            -- do melee attack
+           
             ai_move(u, best_fight_pos)
 
             attack_coroutine_u1 = u
@@ -311,16 +300,16 @@ function ai_coroutine()
         end
 
         if not has_attacked then
-          -- pathfind to enemy hq by default
+         
           local enemy_hq = players_hqs[3 - players_turn].p
           local goal = enemy_hq
 
           if manhattan_distance(goal, u.p) < 5 and u.index > 2 then
-            -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
+           
             goal = players_hqs[players_turn].p
           elseif u.hp < 4 or (u.hp < 9 and get_struct_at_pos(u.p, players_turn_team, nil, nil, 3)) then
-            -- if our health is low, or we're healing and standing on a structure that's not a base, navigate to the nearest friendly city/hq
-            -- refac: combine this with the capture structures for loop below. maybe a "get_nearest_struct" function or "get_nearest_obj"
+           
+           
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
@@ -336,12 +325,12 @@ function ai_coroutine()
               goal = nearest_struct.p
             end
           elseif u.index < 3 then
-            -- if we're an infantry or mech, navigate to nearest capturable structure
+           
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
               local struct_weight = 0
-              if struct_type ~= 2 then struct_weight = 3 end  -- prefer to capture bases/hqs over cities
+              if struct_type ~= 2 then struct_weight = 3 end 
               local d = manhattan_distance(u.p, struct.p) - struct_weight
               local unit_at_struct = get_unit_at_pos(struct.p)
               if d < nearest_struct_d and struct.team ~= players_turn_team and
@@ -361,18 +350,18 @@ function ai_coroutine()
           local path_movable = {}
           for t in all(path) do
             if point_in_table(t, unit_movable_tiles) and (u.index < 3 or not points_equal(t, enemy_hq)) then
-              -- add the walkable points to the path but disregard the enemy's hq if we're not infantry/mech
+             
               add(path_movable, t)
             end
           end
 
-          -- find point in path that is closest to enemy's hq
+         
           local p = point_closest_to_p(path_movable, goal)
           if p then
             ai_move(u, p)
 
             if u.index < 3 then
-              -- capture a structure if we're on one
+             
               local struct = get_struct_at_pos(u.p, nil, players_turn_team)
               if struct then
                 struct:capture(u)
@@ -387,9 +376,9 @@ function ai_coroutine()
     end
   end
 
-  -- build units
+ 
 
-  -- sort the structures based on their distance from the enemy's hq
+ 
   sort_table_by_f(structures, 
     function(struct1, struct2)
       return manhattan_distance(struct1.p, players_hqs[3-players_turn].p) > manhattan_distance(struct2.p, players_hqs[3-players_turn].p)
@@ -397,10 +386,10 @@ function ai_coroutine()
   )
   for struct in all(structures) do
     if struct.type == 3 and struct.team == players_turn_team and not get_unit_at_pos(struct.p) then
-      -- build unit for each of our bases
+     
 
-      -- get unit counts
-      -- artificially add 1 to counts to stop division by 0 errors
+     
+     
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
@@ -415,8 +404,8 @@ function ai_coroutine()
 
       local to_build
       for i = #players_unit_types[players_turn], 1, -1 do
-        -- count backwards from the most expensive unit types 
-        -- build the first one we have the money for that we don't have enough of
+       
+       
         local unit_type = players_unit_types[players_turn][i]
         if unit_type.cost <= players_gold[players_turn] then
           to_build = i
@@ -450,39 +439,39 @@ function ai_capture(u)
 end
 
 function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
-  -- draw marker on unit we're pathfinding for
+ 
   local tiles_to_explore = {}
   local tiles_to_explore = prioqueue.new()
-  tiles_to_explore:add(unit.p, manhattan_distance(unit.p, target)) -- unit position sorted by f_score as starting point
+  tiles_to_explore:add(unit.p, manhattan_distance(unit.p, target))
   local current_tile
 
-  local to_explore_parents = {}  -- map from point -> parent_point. starting node has no parent ;;
-  local to_explore_travel = {unit.travel}  -- map of tile's index in tiles_to_explore -> travel cost
+  local to_explore_parents = {} 
+  local to_explore_travel = {unit.travel} 
 
-  local g_scores = {}  -- map from point -> g_score
+  local g_scores = {} 
   g_scores[unit.p] = 0
 
   while #tiles_to_explore.values > 0 and #tiles_to_explore.values < 100 do
-    -- explore the next tile in tiles_to_explore
+   
 
 
-    -- set the current tile to be the tile in tiles_to_explore with the lowest f_score
-    -- current_tile is two parts {{x, y}, f_score}
+   
+   
     current_tile = tiles_to_explore:pop()
-    local current_t = current_tile[1] -- helper to get the current tile(without f_score)
+    local current_t = current_tile[1]
 
     if points_equal(current_t, target) then
-      -- goal reached. build and return path going backwards from the current node to each parent in the line
+     
       local return_path = {current_t}
       while point_in_table(current_t, to_explore_parents, true) do
 
         current_t = table_point_index(to_explore_parents, current_t)
 
         if point_in_table(current_t, return_path) then
-          -- bug detected. avoid crash
-          -- loop detected, return empty path
-          -- this fixes a nasty bug that happens some games on certain maps where somehow the
-          -- pathfinder sets a parent of a child to be the parent of its parent. ({0,1} => {1,0}, {1,0} => {0,1})
+         
+         
+         
+         
           return {unit.p}
         end
 
@@ -491,15 +480,15 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
       return return_path
     end
 
-    -- if debug then
-    --   rectfill(current_t[1], current_t[2], current_t[1] + 8, current_t[2] + 8, 0)
-    --   yield()
-    -- end
+   
+   
+   
+   
 
-    -- explore this tile's neighbors
+   
     local current_t_g_score = table_point_index(g_scores, current_t)
 
-    -- add all neighboring tiles to the explore list, while reducing their travel leftover
+   
     for t in all(get_tile_adjacents(current_t)) do
 
       local unit_at_t = get_unit_at_pos(t)
@@ -512,8 +501,8 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
         local new_g_score = current_t_g_score + tile_m + friendly_units_weight
  
         if new_g_score < table_point_index(g_scores, t) and tile_m < 255 then
-          -- if the new g_score is less than the old one for this tile, record it
-          -- and set the parent to be equal to the current tile
+         
+         
 
           local tiles_to_explore_point_i_or_nil = point_in_table(t, tiles_to_explore.values)
 
@@ -521,18 +510,18 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
           g_scores[t] = new_g_score
           local new_f_score = new_g_score + manhattan_distance(t, target)
 
-          -- in the wiki pseudocode it says to record the fscore even if the point is already in the to_explore list
-          -- we're not doing that and things seem fine. just keep an eye out if we see weird behavior
-          -- https://en.wikipedia.org/wiki/a*_search_algorithm#pseudocode
+         
+         
+         
           if not tiles_to_explore_point_i_or_nil then
-            -- if the point isn't already in tiles_to_explore, add it. 
+           
             tiles_to_explore:add(t, new_f_score)
           end
         end
       end
     end
   end
-  -- if no path was found, return an empty list
+ 
   return {unit.p}
 end
 
@@ -541,8 +530,8 @@ function manhattan_distance(p, target)
 end
 
 function ai_calculate_attack_value(u, u2, tile)
-  -- returns the estimated value of an attack as the difference between the gain and loss
-  -- tile is the tile we expect to attack from if we're melee
+ 
+ 
   local damage_done = u:calculate_damage(u2)
   local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
   local loss
@@ -553,7 +542,7 @@ function ai_calculate_attack_value(u, u2, tile)
     loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
   end
 
-  -- prioritize sniping capturing infantry/mech
+ 
   local s = get_struct_at_pos(u2.p)
   if s and u.index < 3 then
     gain += 5
@@ -562,9 +551,8 @@ function ai_calculate_attack_value(u, u2, tile)
   return gain - loss
 end
 
--- tile utilities
 function get_unit_at_pos(p)
-  -- returns the unit at pos, or returns nil if there isn't a unit there
+ 
   for unit in all(units) do
     if points_equal(p, unit.p) then
       return unit
@@ -581,31 +569,31 @@ function get_struct_at_pos(p, team, not_team, struct_type, not_struct_type)
 end
 
 function get_selection(p, include_resting)
-    -- returns a two part table where 
-    -- the first index is a flag indicating the selection 
-      -- 0: unit
-      -- 1: base
-      -- 2: tile
-    -- the second index is the selection.
+   
+   
+     
+     
+     
+   
 
   local unit = get_unit_at_pos(p)
   if unit and (include_resting or not unit.is_resting) then
-    -- selection is unit
+   
     return {0, unit}
   end
 
   local tile = mget(p[1] / 8, p[2] / 8)
 
   if fget(tile, 1) and fget(tile, 4) then
-    -- selection is base
+   
     return {1, tile}
   end
-  -- selection is tile
+ 
   return {2, tile}
 end
 
 function get_tile_info(tile)
-  -- returns the {tile name, its defense, its structure type(if applicable), and its team(if applicable)}
+ 
   if fget(tile, 1) then
     local team
     if fget(tile, 6) then team = players[1] elseif fget(tile, 7) then team = players[2] end
@@ -623,11 +611,11 @@ function get_tile_info(tile)
     elseif fget(tile, 5) then return {"cliff", 1.0}
     end
   end
-  return {"unmovable", 0} -- no info
+  return {"unmovable", 0}
 end
 
 function point_closest_to_p(points, p)
-  -- returns the point in points closest to p that doesn't have a unit in it
+ 
   local closest = points[1]
   local closest_d = 32767
   for p2 in all(points) do
@@ -641,10 +629,10 @@ function point_closest_to_p(points, p)
 end
 
 attack_coroutine = function()
-  -- coroutine action that plays out an attack
+ 
   currently_attacking = true
 
-  -- do attack
+ 
   selector_p = copy_v(attack_coroutine_u2.p)
   attack_timer = 0
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
@@ -654,7 +642,7 @@ attack_coroutine = function()
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
     yield()
   end
-  -- do response attack
+ 
   if attack_coroutine_u2.hp > 0 and not attack_coroutine_u1.ranged and not attack_coroutine_u2.ranged then
     selector_p = copy_v(attack_coroutine_u1.p)
     attack_timer = 0
@@ -667,7 +655,7 @@ attack_coroutine = function()
     end
   end
 
-  -- set units new states
+ 
   if attack_coroutine_u1.hp < 1 then
     explode_at = attack_coroutine_u1.p
     attack_coroutine_u1:kill()
@@ -695,7 +683,7 @@ end
 end_turn_coroutine = function()
   end_turn_timer = 0
 
-  -- play turn ending sfx and stop music
+ 
   sfx(7)
   music(-1, 300)
 
@@ -714,7 +702,7 @@ end_turn_coroutine = function()
     pal()
 
     if not played_music and end_turn_timer > 0.7 then
-      -- play music for new player on channels 0, 1, reserving channels 2 and 3 for sfx if needed
+     
       music(players_music[players_turn], 500, 12)
       played_music = true
     end
@@ -727,11 +715,11 @@ end
 function make_cam()
   cam = {}
 
-  -- start cam off at the selector position
+ 
   cam.p = {selector_p[1] - 64, selector_p[2] - 64}
 
   cam.update = function (self) 
-    -- move camera with the selector
+   
     local shake_x = 0
     local shake_y = 0
     if explode_at and attack_timer < 1 then
@@ -749,23 +737,22 @@ function make_cam()
 
 end
 
--- selector code
 function selector_init()
   selector_p = selector_p or {0, 0}
 
   selector_time_since_last_move = 0
 
-  -- movable tiles for selected unit
+ 
   selector_movable_tiles = {}
 
-  -- tiles that a movement arrow has passed through, in order from first to last
+ 
   selector_arrowed_tiles = {}
 
   selector_prompt_selected = 1
   selector_prompt_options = {}
-  selector_prompt_options_disabled = {} -- will appear marked out as disabled
+  selector_prompt_options_disabled = {}
 
-  -- map of selection_type -> prompt texts available
+ 
   selector_prompt_texts = {}
   selector_prompt_texts[2] = {}
   add(selector_prompt_texts[2], "rest")
@@ -773,60 +760,60 @@ function selector_init()
   add(selector_prompt_texts[2], "capture")
   selector_prompt_texts[4] = {}
   add(selector_prompt_texts[4], "end turn")
-  selector_prompt_texts[8] = {}  -- unit construction prompt texts filled in programmatically
+  selector_prompt_texts[8] = {} 
 
   for unit_type in all(players_unit_types[players_turn]) do
-    -- fill in unit type construction prompt texts
+   
     add(selector_prompt_texts[8], unit_type.cost .. "g: " .. unit_type.type)
   end
 
-  -- targets within attack range
+ 
   selector_attack_targets = {}
 
-  -- unit we're actively attacking. used in attack coroutine
-  -- selector_attacking_unit = nil
+ 
+ 
 end
 
 function selector_update()
-  -- only update selection if it's a human's turn
+ 
   if not players_human[players_turn] then return end
 
-  -- do selector movement
+ 
   if not selector_selecting or selector_selection_type == 0 then
     selector_move()
   end
 
   if selector_selecting then
-    -- do selecting
+   
 
-    -- get arrow key directional value. left or down = -1. up or right = +1
+   
     local arrow_val
     if btnp(2) or btnp(1) then arrow_val = 1 elseif btnp(3) or btnp(0) then arrow_val = -1 end
 
     if not btn(5) and selector_selection_type == 5 then
-      -- end checking unit attack range
+     
       selector_stop_selecting()
 
     elseif not btn(4) and selector_selection_type == 6 then
-      -- end checking enemy unit movement
+     
       selector_stop_selecting()
 
     elseif btnp4 then 
       if selector_selection_type == 0 then
-        -- do unit selection
+       
         local unit_at_pos = get_unit_at_pos(selector_p)
         if unit_at_pos and unit_at_pos.id ~= selector_selection.id then
-          -- couldn't move to position. blocked by unit
+         
           sfx(4)
         else
-          -- movement command issued
+         
           selector_selection:move(selector_arrowed_tiles)
 
-          selector_selection_type = 1  -- change selection type to unit movement
+          selector_selection_type = 1 
           return
         end
       elseif selector_selection_type == 2 then
-        -- do unit selection prompt
+       
         if selector_prompt_options[selector_prompt_selected] == 1 then
           selector_selection.is_resting = true
           sfx(1)
@@ -838,32 +825,32 @@ function selector_update()
           selector_stop_selecting()
         end
       elseif selector_selection_type == 3 then
-        -- do begin attacking
+       
 
-        -- set variables to be used in attack coroutine
+       
         attack_coroutine_u1 = selector_selection
         attack_coroutine_u2 = selector_attack_targets[selector_prompt_selected]
         active_attack_coroutine = cocreate(attack_coroutine)
         selector_selection_type = 7
       elseif selector_selection_type == 4 then
-        -- do menu selection prompt (end turn)
+       
 
         selector_stop_selecting()
         end_turn()
       elseif selector_selection_type == 8 then
-        -- do build unit at base/factory
+       
 
         if players_gold[players_turn] > 0 then
-          -- ensure player has gold to spend. this fixes a bug where infantry(default prompt selection) can be built when you have 0g
+         
           selector_selection:build(selector_prompt_selected)
           selector_stop_selecting()
         end
       end
     elseif btnp5 and selector_selection_type ~= 5 and selector_selection_type ~= 7 then
-      -- stop selecting
-      -- don't cancel if type is attack range selection or active attacking
-      if 0 < selector_selection_type and selector_selection_type < 4 then -- if selection type is 1,2, or 3
-        -- return unit to start location if he's moved
+     
+     
+      if 0 < selector_selection_type and selector_selection_type < 4 then
+       
       
         sfx(5)
         selector_selection:unmove()
@@ -873,17 +860,17 @@ function selector_update()
       selector_stop_selecting()
 
     elseif selector_selection_type == 2 or selector_selection_type == 8 then
-      -- do unit selection and base construction prompt
+     
       selector_update_prompt(arrow_val)
     elseif selector_selection_type == 3 then
-      -- unit attack selection
-      -- selector follows attack target
+     
+     
       selector_update_prompt(arrow_val)
       selector_p = selector_attack_targets[selector_prompt_selected].p
     end
 
   else
-    -- do not selecting
+   
 
     local selection = {}
     if btnp4 then
@@ -893,20 +880,20 @@ function selector_update()
     end
 
     if selection[1] == 0 then
-      -- do unit selection
+     
       selector_selection = selection[2]
       if btnp4 then
         sfx(2)
         selector_selecting = true
         if selector_selection.team == players_turn_team then
-          -- start unit selection
+         
           local movable_tiles = selector_selection:get_movable_tiles()
           merge_tables(movable_tiles[1], movable_tiles[2])
           selector_movable_tiles = movable_tiles[1]
           selector_selection_type = 0
           selector_arrowed_tiles = {selector_selection.p}
         else
-          -- start enemy unit selection
+         
           selector_movable_tiles = selector_selection:get_movable_tiles()[1]
           selector_selection_type = 6
         end
@@ -921,7 +908,7 @@ function selector_update()
         selector_selection_type = 5
       end
     elseif btnp4 and selection[1] == 1 and not get_unit_at_pos(selector_p) then
-      -- do base selection
+     
       local struct = get_struct_at_pos(selector_p, players_turn_team, nil, 3)
       if struct then
           selector_selecting = true
@@ -930,7 +917,7 @@ function selector_update()
       end
 
     elseif btnp4 then
-      -- do menu prompt
+     
       selector_selecting = true
       selector_start_menu_prompt()
     end
@@ -940,20 +927,20 @@ function selector_update()
 end
 
 function selector_draw()
-  -- only draw the selector if it's a human's turn
-  local draw_prompt  -- boolean flag for if we should draw the prompt
+ 
+  local draw_prompt 
   if players_human[players_turn] then 
     if selector_selecting then
-      -- draw unit selection ui
+     
 
-      local flip = last_checked_time * 2 % 2  -- used in selection sprite to flip it
+      local flip = last_checked_time * 2 % 2 
       if selector_selection_type == 0 or selector_selection_type == 5 or selector_selection_type == 6 then
 
-        -- select unit
+       
 
         for i, t in pairs(selector_movable_tiles) do
           if selector_selection_type == 5 then
-            -- draw in red if we're in unit attack range selection
+           
             pal(7, 8)
           end
           spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
@@ -963,12 +950,12 @@ function selector_draw()
         end
 
         if selector_selection_type == 0 then
-          -- draw movement arrow
+         
           selector_draw_movement_arrow()
         end
 
       elseif selector_selection_type == 3 then
-        -- draw attack prompt
+       
         for unit in all(selector_attack_targets) do
           pal(7, 8)
           spr(flip + 3, unit.p[1], unit.p[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
@@ -976,7 +963,7 @@ function selector_draw()
         end
 
       elseif selector_selection_type == 2 or selector_selection_type == 4 or selector_selection_type == 8 then
-        -- draw rest/attack/capture unit prompt, menu prompt, and unit construction prompts
+       
         draw_prompt = true
       elseif selector_selection_type == 7 then
         if costatus(active_attack_coroutine) == dead_str then
@@ -989,7 +976,7 @@ function selector_draw()
     end
     
     if selector_selection_type ~= 7 and selector_selection_type ~= 8 then
-      -- draw cursor if we're not fighting and we're not building units
+     
 
       local frame_offset = flr(last_checked_time * 2.4 % 2)
       local offset = 8 - frame_offset * 3
@@ -1002,7 +989,7 @@ function selector_draw()
   if not currently_attacking then
 
     if last_checked_time % 3 > 1.5 then
-      -- draw unit hp
+     
       for u in all(units) do
         if u.hp < 10 then
           set_palette(u.team)
@@ -1012,7 +999,7 @@ function selector_draw()
         end
       end
     else
-      -- draw structure capture left
+     
       for struct in all(structures) do
         if struct.capture_left < 20 then
           local rect_offset = 0
@@ -1026,7 +1013,7 @@ function selector_draw()
     end
   end
 
-  -- draw stats/selection bar at top of screen 
+ 
   local tile = mget(selector_p[1] / 8, selector_p[2] / 8)
   local tile_info = get_tile_info(tile)
   local struct_type = tile_info[3] 
@@ -1037,35 +1024,35 @@ function selector_draw()
   local team_name = players_turn_team
   if last_checked_time % 4 < 2 then team_name = players_co_name[players_turn] end
   if gold < 10 then gold = "0" .. gold end
-  rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
-  rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0)  -- portrait border
-  rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0)  -- team icon border
-  line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2)  -- background
-  rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2)  -- player's gold border
-  rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8) -- players' gold background
-  print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- player's gold
+  rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8) 
+  rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0) 
+  rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0) 
+  line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2) 
+  rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2) 
+  rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8)
+  print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3))
   pal()
-  print(team_name, x_corner + 29, y_corner + 3, 0) -- team name
-  print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
-  spr(players_co_icon[players_turn], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
-  spr(team_icon[players_turn], x_corner + 19, y_corner + 2, 1, 1)  -- icon
+  print(team_name, x_corner + 29, y_corner + 3, 0)
+  print(tile_info[1], x_corner + 30, y_corner + 12, 0)
+  spr(players_co_icon[players_turn], x_corner + 2, y_corner + 2, 2, 2) 
+  spr(team_icon[players_turn], x_corner + 19, y_corner + 2, 1, 1) 
 
-  -- draw structure capture leftover
+ 
   local struct = get_struct_at_pos(selector_p)
   if struct then
-    -- change sprite to uncaptured structure so we don't draw their colors wrong
+   
     local type_to_sprite_map = {28, 29, 30}
     tile = type_to_sprite_map[struct_type]
-    rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
+    rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0) 
     local capture_left = struct.capture_left
     if struct.capture_left < 10 then capture_left = "0" .. struct.capture_left end
-    print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
+    print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3))
   end
-  spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
+  spr(tile, x_corner + 20, y_corner + 11, 1, 1) 
 
   if draw_prompt then
-    -- draw the prompt if the above flag was set
-    -- we draw it last so other things don't get drawn over it
+   
+   
     selector_draw_prompt()
   end
 
@@ -1085,19 +1072,19 @@ end
 function selector_start_unit_prompt()
   selector_selection_type = 2
 
-  selector_prompt_options = {1}  -- rest is in options by default
+  selector_prompt_options = {1} 
 
-  -- store the attack targets
+ 
   selector_attack_targets = selector_selection:targets()
   if #selector_attack_targets > 0 and (not selector_selection.ranged or not selector_selection.has_moved) then 
-    -- add attack to the prompt if we have targets
+   
     add(selector_prompt_options, 2)
   end
 
   local struct = get_struct_at_pos(selector_selection.p, nil, players_turn_team)
   if struct and selector_selection.index < 3 then
-    -- ensure we're an infantry or mech with `selector_selection.index < 3`
-    -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
+   
+   
     add(selector_prompt_options, 3)
   end
 
@@ -1125,7 +1112,7 @@ end
 function selector_start_menu_prompt()
   selector_selection_type = 4
 
-  selector_prompt_options = {1}  -- end turn is in options by default
+  selector_prompt_options = {1} 
   selector_prompt_selected = 1
 
   sfx(6)
@@ -1182,23 +1169,23 @@ end
 function selector_move()
   selector_time_since_last_move += delta_time
 
-  -- get x and y change as a vector from controls input
+ 
   local change = selector_get_move_input()
 
-  -- move to the position based on input
-  -- don't move if we're in any prompt selection_type
+ 
+ 
   if selector_time_since_last_move > 0.1 then
     if change[1] and change[2] then
-      -- if both inputs are down, perform move twice, once for x, once for y
+     
       local move_result = selector_move_to(change[1], 0)
       if move_result then
         selector_move_to(0, change[2])
       end
     elseif change[1] then
-      -- move x
+     
       selector_move_to(change[1], 0)
     elseif change[2] then
-      -- move y
+     
       selector_move_to(0, change[2])
     end
   end
@@ -1216,14 +1203,14 @@ function selector_get_move_input()
 end
 
 function selector_move_to(change_x, change_y)
-  -- moves the selector to a specific location
-  -- returns true on successful cursor movement
+ 
+ 
 
   local new_p = {selector_p[1] + change_x, selector_p[2] + change_y}
   local in_bounds = point_in_rect(new_p, {current_map.r[1]*8, current_map.r[2]*8, current_map.r[3]*8, current_map.r[4]*8})
 
   if selector_selecting and selector_selection_type == 0 then
-    -- if we're selecting a unit, keep selector bounded by unit's mobility
+   
     in_bounds = in_bounds and point_in_table(new_p, selector_movable_tiles)
   end
 
@@ -1231,7 +1218,7 @@ function selector_move_to(change_x, change_y)
     selector_p = new_p
 
     if selector_selecting and selector_selection_type == 0 then
-      -- if we crossover our arrow, delete all points in the arrow after the crossover
+     
       local point_i = point_in_table(new_p, selector_arrowed_tiles)
       if point_i then
         local new_arrowed_tiles = {}
@@ -1241,7 +1228,7 @@ function selector_move_to(change_x, change_y)
         selector_arrowed_tiles = new_arrowed_tiles
       end
 
-      -- add tile to the arrowed tiles list
+     
       add(selector_arrowed_tiles, new_p)
 
     end
@@ -1253,8 +1240,8 @@ function selector_move_to(change_x, change_y)
 end
 
 function selector_draw_movement_arrow()
-  -- draws a movement arrow during unit selection
-  -- directions = n: 0, s: 1, e: 2, w: 3
+ 
+ 
   local last_p = selector_arrowed_tiles[1]
   local last_p_direction
   local next_p
@@ -1288,7 +1275,7 @@ function selector_draw_movement_arrow()
     end
     next_p = selector_arrowed_tiles[i+1]
     if next_p then
-      -- take into account the next point so we can make curved arrows
+     
       if next_p[2] < current_p[2] then next_p_direction = 0 
       elseif next_p[2] > current_p[2] then next_p_direction = 1 
       elseif next_p[1] > current_p[1] then next_p_direction = 2 
@@ -1342,7 +1329,7 @@ function selector_draw_movement_arrow()
         end
       end
     else
-      -- draw arrowhead
+     
       if last_p_direction == 0 then
         sprite = arrowhead
       elseif last_p_direction == 1 then
@@ -1368,11 +1355,11 @@ end
 function make_war_map(r)
   war_map = {}
 
-  -- rect of bounds
+ 
   war_map.r = r
 
   war_map.draw = function(self)
-    -- fill background in with patterns
+   
     local x = self.r[1]*8
     local y = self.r[2]*8
     local w = self.r[3]*8
@@ -1387,21 +1374,21 @@ function make_war_map(r)
     fillp(0b0100000101000001)
     rectfill(x-16, y-16, x+w+23, y+h+23, fill_color)
     fillp(0)
-    -- fill with map bgcolor
+   
     rectfill(x-8, y-8, x+w+15, y+h+15, map_bg_color)
 
-    -- draw map tiles
+   
     map(self.r[1], self.r[2], self.r[1] * 8, self.r[2] * 8, self.r[3] + 1, self.r[4] + 1)
   end
 
   war_map.load = function(self)
-    -- set global structures to contain all structures
+   
     structures = {}
     for tile_y = self.r[2], self.r[2] + self.r[4]  do
       for tile_x = self.r[1], self.r[1] + self.r[3] do
         local tile_info = get_tile_info(mget(tile_x, tile_y))
         if tile_info[3] then
-          -- create structure of whatever type this tile is, and owned by whatever player owns this struct(if any)
+         
           add(structures, make_structure(tile_info[3], {tile_x * 8, tile_y * 8}, tile_info[4]))
         end
       end
@@ -1414,30 +1401,30 @@ end
 function make_structure(struct_type, p, team)
   local struct = {}
 
-  -- structure types:
-  -- 1: hq
-  -- 2: city
-  -- 3: base
+ 
+ 
+ 
+ 
   struct.type = struct_type
   struct.p = p
   struct.team = team
   struct.capture_left = 20
 
-  -- set structure sprite based on the structure type
+ 
   local struct_sprite
   if struct_type == 1 then 
     struct_sprite = 64
-    players_hqs[players_reversed[team]] = struct  -- add this hq to the list of hqs
+    players_hqs[players_reversed[team]] = struct 
     if team == players[1] then
       selector_p = p
     end
   elseif struct_type == 2 then struct_sprite = 65
   else struct_sprite = 66 end
 
-  -- components
+ 
   local active_animator
   if not team then 
-    -- set palette to unowned if we have no team (5 magic number for unowned)
+   
     team = 5 
     active_animator = false
   end
@@ -1463,7 +1450,7 @@ function make_structure(struct_type, p, team)
       self.animator.animation_flag = true
       self.capture_left = 20
       if self.type == 1 then
-        -- hq captured; end game
+       
         end_game(players_turn)
       end
     else
@@ -1487,7 +1474,7 @@ end
 function make_unit(unit_type_index, p, team)
   local unit = {}
 
-  -- inherit all properties from unit_type
+ 
   local unit_type = players_unit_types[players_reversed[team]][unit_type_index]
   for k, v in pairs(unit_type) do
     unit[k] = v
@@ -1501,15 +1488,15 @@ function make_unit(unit_type_index, p, team)
   unit.cached_animator_fps = 0.4
   unit.hp = 10
 
-  -- active flag is used by the ai so that we don't do ai twice for a dead unit
+ 
   unit.active = true
 
-  -- points to move to one at a time
+ 
   unit.cached_p = {}
   unit.movement_points = {}
-  unit.cached_sprite = unit.sprite -- cached sprite that we can revert to after changing it
+  unit.cached_sprite = unit.sprite
 
-  -- components
+ 
   unit.animator = make_animator(
     unit,
     unit.cached_animator_fps,
@@ -1536,28 +1523,28 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.get_movable_tiles = function(self, travel_offset, add_enemy_units_to_return)
-    -- returns two tables
-    -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
-    -- the second table is the rest of the tiles they could move to if their own units weren't occupying them. 
+   
+   
+   
 
-    -- travel_offset increases the distance of the search by one. you can determine areas of attack of setting this to 1
-    -- if we want to see the enemy units we can attack, we should also set `add_enemy_units_to_return` to true. 
+   
+   
     travel_offset = travel_offset or 0
 
     local current_tile
-    local tiles_to_explore = {{self.p, self.travel + travel_offset}}  -- store the {point, travel leftover}
+    local tiles_to_explore = {{self.p, self.travel + travel_offset}} 
     local movable_tiles = {}
     local tiles_with_our_units = {}
-    local explore_i = 0  -- index in tiles_to_explore of what we've explored so far
+    local explore_i = 0 
 
     while #tiles_to_explore > explore_i do
       explore_i += 1
       current_tile = tiles_to_explore[explore_i]
 
-      -- explore this tile's neighbors
-      local current_t = current_tile[1] -- helper to get the current tile(without travel)
+     
+      local current_t = current_tile[1]
 
-      -- if we haven't already added this tile to be returned, add it to be returned
+     
       local has_added_to_movable_tiles = false
       for t2 in all(movable_tiles) do
         has_added_to_movable_tiles = points_equal(current_t, t2)
@@ -1571,13 +1558,13 @@ function make_unit(unit_type_index, p, team)
         end
       end
 
-      -- add all neighboring tiles to the explore list, while reducing their travel leftover
+     
       for t in all(get_tile_adjacents(current_t)) do
 
-        -- check the travel reduction for the tile's type
+       
         local travel_left = current_tile[2] - self:tile_mobility(mget(t[1] / 8, t[2] / 8))
 
-        -- see if we've already checked this tile. if we have and the cost to get to it was lower, don't explore the new tile.
+       
         local checked = false
         for t2 in all(tiles_to_explore) do
 
@@ -1607,7 +1594,7 @@ function make_unit(unit_type_index, p, team)
     self.movement_points = points
     self.animator.fps = 0.1
 
-    -- used by selector to return unit to starting point by pressing btn(5)
+   
     self.has_moved = #points > 1
 
     sfx(self.moveout_sfx)
@@ -1620,26 +1607,26 @@ function make_unit(unit_type_index, p, team)
     local next_p = self.movement_points[self.movement_i]
 
     if next_p then
-      -- next waypoint found. start moving to it
+     
 
       local reached = points_equal(self.p, next_p)
 
       if reached then
-        -- reached the goal. on to the next one
+       
         self.movement_i += 1
         return self:update_move()
       end
 
-      -- reset sprite to default state
+     
       self.animator.sprite = self.cached_sprite
 
       if next_p[2] > self.p[2] then 
-        -- animate sprite walking forwards
+       
         self.animator.sprite = self.cached_sprite + 32
         y_change = 1
       elseif next_p[2] < self.p[2] then 
         y_change = -1
-        -- animate sprite walking backwards
+       
         self.animator.sprite = self.cached_sprite + 16
       elseif next_p[1] > self.p[1] then 
         self.animator.flip_sprite = false
@@ -1658,9 +1645,9 @@ function make_unit(unit_type_index, p, team)
       end
 
     else
-      -- no more points left. stop moving
+     
       if players_human[players_turn] then
-        selector_start_unit_prompt()  -- change to select type unit prompt
+        selector_start_unit_prompt() 
       end
 
       self:cleanup_move()
@@ -1686,13 +1673,13 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.unmove = function(self)
-    -- un-does a move, moving the unit back to its start location
+   
     self.p = self.cached_p
     self:cleanup_move()
   end
 
   unit.cleanup_move = function(self)
-    self.animator.sprite = self.cached_sprite  -- reset animator to default state
+    self.animator.sprite = self.cached_sprite 
     self.animator.fps = self.cached_animator_fps
     self.animator.flip_sprite = false
     self.is_moving = false
@@ -1702,7 +1689,7 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.tile_mobility = function(self, tile)
-    -- returns the mobility cost for traversing a tile for the unit's mobility type
+   
     if fget(tile, 0) then
       if fget(tile, 1) then return 1
       elseif fget(tile, 6) then
@@ -1716,10 +1703,10 @@ function make_unit(unit_type_index, p, team)
         if self.mobility_type == 0 then return 2
         elseif self.mobility_type == 1 then return 1
         end
-        -- else return 255 end
+       
       end
     elseif fget(tile, 1) then return 1 end
-    return 255 -- unwalkable if all other options are exhausted
+    return 255
   end
 
   unit.ranged_attack_tiles = function(self, p)
@@ -1765,7 +1752,6 @@ function make_unit(unit_type_index, p, team)
   return unit
 end
 
--- components
 function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset, draw_shadow, animation_flag)
   local animator = {}
   animator.parent = parent
@@ -1775,14 +1761,14 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   animator.palette = palette
   if animation_flag ~= nil then animator.animation_flag = animation_flag else animator.animation_flag = true end
   if draw_offset then animator.draw_offset = draw_offset else animator.draw_offset = {0, 0} end
-  animator.draw_shadow = draw_shadow  -- draws a shadow on sprites if true
+  animator.draw_shadow = draw_shadow 
 
   animator.time_since_last_frame = 0
   animator.animation_frame = 0
   animator.flip_sprite = false
 
   animator.draw = function(self)
-    -- update and animate the sprite
+   
     self.time_since_last_frame += delta_time
     if self.animation_flag and self.time_since_last_frame > self.fps then
       self.animation_frame = (self.animation_frame + 1) % 2
@@ -1796,16 +1782,16 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
       animation_frame = self.sprite
     end
 
-    -- draw sprite
+   
     if(self.palette) then
       set_palette(self.palette)
     end
 
     if self.draw_shadow then
-      -- draw shadow
+     
       outline_sprite(animation_frame, 0, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
     else
-      -- draw sprite normally
+     
       spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1, 1, self.flip_sprite)
     end
 
@@ -1817,7 +1803,6 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
 
 end
 
--- save/loading data functions
 function peek_increment()
   local v = peek(memory_i)
   memory_i += 1
@@ -1830,22 +1815,22 @@ function poke_increment(poke_value)
 end
 
 function load_string(n)
-  -- reads a string from memory and increments the memory_i counter by its length
+ 
   local str = ""
   for i = 1, n do
     local charcode_val = chr(peek_increment())
     str = str .. charcode_val
   end
-  -- i don't know what this returns, but it's not a string. that's fine. it works. 
+ 
   return str
 end
 
 function load_assets()
 
-  -- load all 8 unit types for players 1 and 2
+ 
   for i=1, 2 do
 
-    -- load player data
+   
     players_human[i] = peek_increment() == 1
     players_co_name[i] = load_string(10)
     players[i] = team_index_to_palette[peek_increment()]
@@ -1854,7 +1839,7 @@ function load_assets()
     players_music[i] = peek_increment()
 
     for j=1, 7 do
-      -- load unit data
+     
       local u = {}
       u.index = peek_increment()
       u.type = load_string(10)
@@ -1864,7 +1849,7 @@ function load_assets()
       u.cost = peek_increment()
       u.range_min = peek_increment()
       u.range_max = peek_increment()
-      u.ranged = u.range_min > 0  -- add helper variable to determine if unit is ranged
+      u.ranged = u.range_min > 0 
       u.luck_max = peek_increment()
       u.capture_bonus = peek_increment()
       u.struct_heal_bonus = peek2(memory_i)
@@ -1877,7 +1862,7 @@ function load_assets()
       u.damage_chart = {}
       for k=1, 7 do
         local v = peek4(memory_i)
-        memory_i += 4  -- value is 4byte float. increment by 4
+        memory_i += 4 
 
         add(u.damage_chart, v)
       end
@@ -1886,15 +1871,15 @@ function load_assets()
     end
   end
 
-  players_reversed = {}  -- create a global reverse index for getting player index by team
+  players_reversed = {} 
   players_reversed[players[1]] = 1
   players_reversed[players[2]] = 2
 
-  -- loads war map
+ 
   current_map = make_war_map({peek_increment(), peek_increment(), peek_increment(), peek_increment()})
   map_bg_color = peek_increment()
 
-  -- load map data from external source
+ 
   if peek_increment() == 1 then
     reload(0x2000, 0x2000, 0x1000, 'loader.p8')
   end
@@ -1902,7 +1887,6 @@ function load_assets()
 end
 
 
--- palette functions
 function set_palette(palette)
   if palette == palette_orange then
     return
@@ -1918,7 +1902,7 @@ function set_palette(palette)
     pal(9, 14)
     pal(8, 2)
     pal(2, 10)
-  elseif palette == 5 then -- un-owned palette. 5 is magic number we use
+  elseif palette == 5 then
     pal(9, 13)
     pal(8, 6)
     pal(2, 5)
@@ -1929,7 +1913,6 @@ function set_palette(palette)
   end
 end
 
--- vector functions
 function points_equal(p1, p2)
   return p1[1] == p2[1] and p1[2] == p2[2]
 end
@@ -1939,12 +1922,10 @@ function copy_v(v)
 end
 
 
--- rect functions
 function point_in_rect(p, r)
   return p[1] >= r[1] and p[1] <= r[1] + r[3] and p[2] >= r[2] and p[2] <= r[2] + r[4]
 end
 
--- table functions
 function sort_table_by_f(a, f)
   for i=1,#a do
     local j = i
@@ -1956,30 +1937,30 @@ function sort_table_by_f(a, f)
 end
 
 function point_in_table(p, t, keys)
-  -- returns the index of the first point that matches if it is in the table
-  -- otherwise returns nil
+ 
+ 
 
-  -- if keys is true we instead compare p against the table's keys and return the value.
+ 
   for i, p2 in pairs(t) do
     if keys then 
-      if points_equal(p, i) then return p2 end  -- compare p with keys
+      if points_equal(p, i) then return p2 end 
     else
-      if points_equal(p, p2) then return i end  -- compare p with values
+      if points_equal(p, p2) then return i end 
     end
   end
 end
 
 function table_point_index(t, p)
-  -- works like table[key] except key can be a point
-  -- otherwise returns nil
+ 
+ 
   for k, v in pairs(t) do
     if points_equal(p, k) then return v end
   end
-  return 32767  -- return (essentiall) infinity if the point isn't in the table. this is for pathfinding
+  return 32767 
 end
 
 function merge_tables(t1, t2)
-  -- merges the second table into the first
+ 
   i = #t1 + 1
   for _, v in pairs(t2) do 
     t1[i] = v 
@@ -2010,18 +1991,18 @@ function remove(list, pos)
 end
 
 function outline_sprite(n,col_outline,x,y,flip_x,sprite_palette)
-  -- reset palette to black
+ 
   for c=1,15 do
     pal(c,col_outline)
   end
-  -- draw outline
+ 
   for xx=-1,1 do
     for yy=-1,1 do
       spr(n,x+xx,y+yy,1,1,flip_x,flip_y)
     end
   end
   pal()
-  -- draw final sprite
+ 
   set_palette(sprite_palette)
   spr(n,x,y,1,1,flip_x,flip_y) 
   pal()
@@ -2033,7 +2014,7 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
   local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
   local y_pos = center_pos[2]
 
-  -- draw message background rectangle
+ 
   rectfill(
     x_pos - 2,
     y_pos - 2,
@@ -2050,7 +2031,7 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
       2)
   end
 
-  -- draw message
+ 
   print(msg, x_pos, y_pos - 1, 0)
 end
 
@@ -2061,8 +2042,6 @@ function get_tile_adjacents(p)
      {p[1] - 8, p[2]}}
 end
 
--- priority queue code
--- edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
 prioqueue = {}
 prioqueue.__index = prioqueue
 
