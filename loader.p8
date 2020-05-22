@@ -1,5 +1,5 @@
 pico-8 cartridge // http://www.pico-8.com
-version 23
+version 27
 __lua__
 -- pico wars
 -- by lambdanaut
@@ -112,7 +112,7 @@ function _init()
   for i=1, 2 do
     write_co(game_commanders[i], team_humans[i], team_indexes[i])
   end
-  write_map(make_map2())
+  write_map(make_map4())
 
   -- load save
   write_save()
@@ -161,7 +161,7 @@ function make_map2()
   local m = {}
 
   m.name = "map2"
-  m.r = {18, 0, 15, 12}
+  m.r = {15, 0, 15, 12}
   m.bg_color = 3
 
   -- should we load the map from a source other than the engine?
@@ -171,6 +171,33 @@ function make_map2()
   return m
 end
 
+function make_map3()
+  local m = {}
+
+  m.name = "map3"
+  m.r = {31, 0, 26, 25}
+  m.bg_color = 12
+
+  -- should we load the map from a source other than the engine?
+  -- 0=false, 1=load from this map, 2=load from secondary map source
+  m.load_external = 0
+
+  return m
+end
+
+function make_map4()
+  local m = {}
+
+  m.name = "map4"
+  m.r = {15, 14, 15, 15}
+  m.bg_color = 3
+
+  -- should we load the map from a source other than the engine?
+  -- 0=false, 1=load from this map, 2=load from secondary map source
+  m.load_external = 0
+
+  return m
+end
 
 -- commanders
 function make_commanders()
@@ -789,7 +816,6 @@ function read_save()
   -- write available commanders to disk
   for co in all(commanders) do
     local available = peek_increment()
-    printh(available)
     if available == 1 then co.available = true end
   end
 
