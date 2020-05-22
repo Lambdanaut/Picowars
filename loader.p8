@@ -99,7 +99,7 @@ function _init()
     make_alecia(),
   }
   local team_humans = {
-    true,
+    false,
     false
   }
   local team_indexes = {

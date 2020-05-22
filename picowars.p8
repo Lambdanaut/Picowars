@@ -8,7 +8,7 @@ __lua__
 -- thanks to nintendo for making advance wars
 -- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
 
--- debug = true
+debug = true
 
 -- palettes
 
@@ -370,6 +370,15 @@ function ai_coroutine()
           local p = point_closest_to_p(path_movable, goal)
           if p then
             ai_move(u, p)
+
+            if u.index < 3 then
+              -- capture a structure if we're on one
+              local struct = get_struct_at_pos(u.p, nil, players_turn_team)
+              if struct then
+                struct:capture(u)
+              end
+            end
+
             u.is_resting = true
           end
         end
@@ -435,12 +444,9 @@ function ai_move(u, p)
     selector_p = copy_v(u.p)
     yield()
   end
-  if u.index < 3 then
-    local struct = get_struct_at_pos(u.p, nil, players_turn_team)
-    if struct then
-      struct:capture(u)
-    end
-  end
+end
+
+function ai_capture(u)
 end
 
 function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
@@ -1088,8 +1094,8 @@ function selector_start_unit_prompt()
     add(selector_prompt_options, 2)
   end
 
-  local struct = get_struct_at_pos(selector_selection.p)
-  if struct and selector_selection.index < 3 and struct.team ~= players_turn_team then
+  local struct = get_struct_at_pos(selector_selection.p, nil, players_turn_team)
+  if struct and selector_selection.index < 3 then
     -- ensure we're an infantry or mech with `selector_selection.index < 3`
     -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
     add(selector_prompt_options, 3)
