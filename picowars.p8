@@ -1,16 +1,8 @@
 pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
--- pico wars
--- by lambdanaut
--- https://lambdanaut.itch.io/
--- https://twitter.com/lambdanaut
--- thanks to nintendo for making advance wars
--- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
 
 debug = false
-
--- palettes
 
 palette_orange = "orange star★"
 palette_blue = "blue moon●"
@@ -26,10 +18,8 @@ team_index_to_palette = {
 
 team_icon = {}
 
--- saves a couple tokens
-local dead_str = 'dead'
+dead_str = 'dead'
 
--- globals
 last_checked_time = 0.0
 delta_time = 0.0
 unit_id_i = 0
@@ -37,12 +27,15 @@ attack_timer = 0
 end_turn_timer = 0
 memory_i = 0x1000
 in_splash_screen = true
-map_index_selected = 1
+map_index_selected = 0
+ai_index_selected = 0
+splash_option_selected = 0
+
+map_index_options = {"arbor island", "lil highland", "long island", "duble truble"}
+ai_index_options = {"vs ai", "vs human"}
 
 
 function _init()
-  -- add menu item to return to loader
-  menuitem(1, "abandon mission", function() end_game(3) end)
 
   load_assets()
 end
@@ -58,15 +51,33 @@ function _update()
   btnp5 = btnp(5)
 
   if in_splash_screen then
-    if btnp(0) or btnp(3) then map_index_selected -= 1 elseif btnp(1) or btnp(2) then map_index_selected += 1 end
-    map_index_selected = max(1, min(4, map_index_selected))
+    if splash_option_selected == 0 then 
+      if btnp(0) then 
+        map_index_selected -= 1 
+        sfx(6)
+      elseif btnp(1) then 
+        map_index_selected += 1
+        sfx(6)
+      end
+    elseif btnp(0) or btnp(1) then 
+      ai_index_selected += 1 
+      sfx(6)
+    end
+    if btnp(2) or btnp(3) then
+      splash_option_selected += 1
+        sfx(6)
+    end
+    map_index_selected = map_index_selected % 4
+    ai_index_selected = ai_index_selected % 2
+    splash_option_selected = splash_option_selected % 2
 
     if btnp4 or btnp5 then 
       in_splash_screen = false 
 
       local map_index_mapping = { {{0, 0, 14, 21}, 12}, {{15, 0, 15, 12}, 3}, {{31, 0, 26, 25}, 12}, {{15, 14, 15, 15}, 3} }
-      current_map = make_war_map(map_index_mapping[map_index_selected][1])
-      map_bg_color = map_index_mapping[map_index_selected][2]
+      current_map = make_war_map(map_index_mapping[map_index_selected+1][1])
+      map_bg_color = map_index_mapping[map_index_selected+1][2]
+      players_human[2] = ai_index_selected == 1
 
       current_map:load()
       make_cam()
@@ -74,6 +85,8 @@ function _update()
       selector_init()
       players_turn_team = players[players_turn]
     end
+  elseif game_over then
+
 
   else
     selector_update()
@@ -89,17 +102,28 @@ function _update()
 end
 
 function _draw()
-  -- clear screen
+ 
   cls()
 
   if in_splash_screen then
-    -- set initial background color
-    rectfill(0, 0, 1000, 1000, 9)
-    print("== picowars v0.1 ==",24, 38, 0)
-    print("== closed beta ==", 28, 45, 0)
-    print("arrow keys change map. ", 22, 52, 0)
-    print("'z' or 'x' to start.", 26, 60, 0)
-    print("== map: " .. map_index_selected .. " ==", 37, 68, 0)
+   
+    rectfill(0, 0, 128, 128, 0)
+    spr(160, 31, 29, 8, 2)
+    print("version 0.2", 42, 40, 9)
+    for y = 0, 1 do
+      for x = 0, 1 do
+        spr(168 + last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
+      end
+    end
+    rectfill(38, 58 + (splash_option_selected) * 19, 86, 64 + (splash_option_selected) * 19, 4)
+    print(map_index_options[map_index_selected+1], 39, 59, 7)
+    print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
+    print("press ❎ to play", 32, 98, 7)
+  elseif game_over then 
+    local game_over_text = "victory!"
+    if game_over == 2 then game_over_text = "defeat" end
+    rectfill(0, 0, 128, 128, 0)
+    print(game_over_text, 42, 40, 9)
   else
     current_map:draw()
 
@@ -107,15 +131,15 @@ function _draw()
       structure:draw()
     end
 
-    -- draw tips of hqs
+   
     for i = 1, 2 do
       local hq = players_hqs[i]
       set_palette(hq.team)
-      spr(67, hq.p[1], hq.p[2] - 11) -- draw the spire of an hq
+      spr(67, hq.p[1], hq.p[2] - 11)
       pal()
     end
     
-    -- sort units by their y position for drawing
+   
     sort_table_by_f(units, function(u1, u2) return u1.p[2] > u2.p[2] end)
     for unit in all(units) do
       unit:draw()
@@ -123,7 +147,7 @@ function _draw()
 
     selector_draw()
 
-    -- run end_turn coroutine thread
+   
     if active_end_turn_coroutine and costatus(active_end_turn_coroutine) == dead_str then
       active_end_turn_coroutine = nil
     elseif active_end_turn_coroutine then
@@ -136,12 +160,11 @@ function _draw()
   end
 end
 
--- lvl manager code
 players_turn = 0
 players = {}
 players_human = {}
 players_co_name = {}
-players_hqs = {}  -- the hqs for the two players
+players_hqs = {} 
 players_gold = {0, 0}
 players_units_lost = {0, 0}
 players_units_built = {0, 0}
@@ -151,35 +174,20 @@ players_co_icon = {}
 units = {}
 turn_i = 0
 function end_game(reason)
-  -- end the game
-  -- reasons:
-  -- * 1: victory player 1
-  -- * 2: victory player 2
-  -- * 3: abandon mission
-
-  -- write match result to memory
-  memory_i = 0x5ddd -- beginning of match result memory
-  poke_increment(reason)
-  for i = 1, 2 do
-    poke_increment(players_units_lost[i])
-    poke_increment(players_units_built[i])
-  end
-  poke_increment(turn_i)
-
-  load("loader.p8")
+  game_over = players_turn
 end
 function end_turn()
-  -- change team's turn
+ 
   players_turn = players_turn % 2 + 1
   players_turn_team = players[players_turn]
 
-  -- increment the turn count
+ 
   turn_i += 1
 
   for unit in all(units) do
     unit.is_resting = false
 
-    -- heal all units on cities
+   
     local struct = get_struct_at_pos(unit.p, players_turn_team)
     if unit.team == players_turn_team and struct then
       unit.hp = min(unit.hp + 2 + unit.struct_heal_bonus, 10)
@@ -188,24 +196,23 @@ function end_turn()
 
   for struct in all(structures) do
     if struct.team == players_turn_team then
-      -- add income for each city
+     
       players_gold[players_turn] += 1
     end
   end
 
   selector_p = players_hqs[players_turn].p
 
-  -- create end_turn animation coroutine
+ 
   active_end_turn_coroutine = cocreate(end_turn_coroutine)
 
 end
 
--- ai code
 function ai_update()
-  if players_human[players_turn] then return end  -- don't do ai for humans
+  if players_human[players_turn] then return end 
 
-  -- update ai's units
-  -- sort units based on infantry/mech type
+ 
+ 
   ai_units_ranged = {}
   ai_units_infantry = {}
   other_ai_units = {}
@@ -221,11 +228,11 @@ function ai_update()
     end
   end
   ai_units = {}
-  merge_tables(ai_units, ai_units_ranged)  -- move ranged first
-  merge_tables(ai_units, ai_units_infantry)  -- then infantry
-  merge_tables(ai_units, other_ai_units)  -- then other units
+  merge_tables(ai_units, ai_units_ranged) 
+  merge_tables(ai_units, ai_units_infantry) 
+  merge_tables(ai_units, other_ai_units) 
 
-  -- run primary coroutine thread
+ 
   if not active_ai_coroutine then
     active_ai_coroutine = cocreate(ai_coroutine)
   elseif costatus(active_ai_coroutine) == dead_str then
@@ -237,25 +244,25 @@ function ai_update()
 end
 
 function ai_coroutine()
-  -- 3 waves of passing through our units
+ 
 
   for i = 1, 3 do
     for u in all(ai_units) do 
       if u.active and not u.is_resting then
-        -- get unit's movable tiles
+       
         local unit_movable_tiles = u:get_movable_tiles()[1]
         add(unit_movable_tiles, u.p)
 
         local has_attacked
 
-        -- determine if there are any good fights to have within our range
+       
         if u.ranged then
-          -- ranged attack
+         
           local ranged_targets = u:targets()
 
           if #ranged_targets > 0 then
             local best_target_u
-            local best_target_value = -32767  -- start at negative infinity
+            local best_target_value = -32767 
             for u2 in all(ranged_targets) do
               local attack_value = ai_calculate_attack_value(u, u2)
               if attack_value > best_target_value then
@@ -272,24 +279,24 @@ function ai_coroutine()
             end
           end
         elseif (u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team)) then
-          -- if we're not an infantry or we're an infantry that's not capturing, look for the best melee attack we can make
-          -- melee attacks
+         
+         
           local attackables = {}
 
-          -- get the positions we can attack enemies from
-          -- map of tile_p => attackable enemy unit from that position 
+         
+         
           for t in all(unit_movable_tiles) do
             attackables[t] = u:targets(t)
           end
 
-          -- determine best fight to take
+         
           local best_fight_u
           local best_fight_pos
-          local best_fight_value = -32767  -- start at negative infinity
+          local best_fight_value = -32767 
 
           for t, attackable_unit in pairs(attackables) do
             for u2 in all(attackable_unit) do
-              -- simulate us attacking them and them attacking back
+             
               local attack_value = ai_calculate_attack_value(u, u2, t)
               if attack_value >= 0 and attack_value > best_fight_value then
                 best_fight_value = attack_value
@@ -300,7 +307,7 @@ function ai_coroutine()
           end
 
           if best_fight_pos then
-            -- do melee attack
+           
             ai_move(u, best_fight_pos)
 
             attack_coroutine_u1 = u
@@ -311,16 +318,16 @@ function ai_coroutine()
         end
 
         if not has_attacked then
-          -- pathfind to enemy hq by default
+         
           local enemy_hq = players_hqs[3 - players_turn].p
           local goal = enemy_hq
 
           if manhattan_distance(goal, u.p) < 5 and u.index > 2 then
-            -- if we're not an infantry/mech and we're next to the goal, head back home to get off their hq
+           
             goal = players_hqs[players_turn].p
           elseif u.hp < 4 or (u.hp < 9 and get_struct_at_pos(u.p, players_turn_team, nil, nil, 3)) then
-            -- if our health is low, or we're healing and standing on a structure that's not a base, navigate to the nearest friendly city/hq
-            -- refac: combine this with the capture structures for loop below. maybe a "get_nearest_struct" function or "get_nearest_obj"
+           
+           
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
@@ -336,12 +343,12 @@ function ai_coroutine()
               goal = nearest_struct.p
             end
           elseif u.index < 3 then
-            -- if we're an infantry or mech, navigate to nearest capturable structure
+           
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
               local struct_weight = 0
-              if struct_type ~= 2 then struct_weight = 3 end  -- prefer to capture bases/hqs over cities
+              if struct_type ~= 2 then struct_weight = 3 end 
               local d = manhattan_distance(u.p, struct.p) - struct_weight
               local unit_at_struct = get_unit_at_pos(struct.p)
               if d < nearest_struct_d and struct.team ~= players_turn_team and
@@ -361,18 +368,18 @@ function ai_coroutine()
           local path_movable = {}
           for t in all(path) do
             if point_in_table(t, unit_movable_tiles) and (u.index < 3 or not points_equal(t, enemy_hq)) then
-              -- add the walkable points to the path but disregard the enemy's hq if we're not infantry/mech
+             
               add(path_movable, t)
             end
           end
 
-          -- find point in path that is closest to enemy's hq
+         
           local p = point_closest_to_p(path_movable, goal)
           if p then
             ai_move(u, p)
 
             if u.index < 3 then
-              -- capture a structure if we're on one
+             
               local struct = get_struct_at_pos(u.p, nil, players_turn_team)
               if struct then
                 struct:capture(u)
@@ -387,9 +394,9 @@ function ai_coroutine()
     end
   end
 
-  -- build units
+ 
 
-  -- sort the structures based on their distance from the enemy's hq
+ 
   sort_table_by_f(structures, 
     function(struct1, struct2)
       return manhattan_distance(struct1.p, players_hqs[3-players_turn].p) > manhattan_distance(struct2.p, players_hqs[3-players_turn].p)
@@ -397,10 +404,10 @@ function ai_coroutine()
   )
   for struct in all(structures) do
     if struct.type == 3 and struct.team == players_turn_team and not get_unit_at_pos(struct.p) then
-      -- build unit for each of our bases
+     
 
-      -- get unit counts
-      -- artificially add 1 to counts to stop division by 0 errors
+     
+     
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
@@ -415,8 +422,8 @@ function ai_coroutine()
 
       local to_build
       for i = #players_unit_types[players_turn], 1, -1 do
-        -- count backwards from the most expensive unit types 
-        -- build the first one we have the money for that we don't have enough of
+       
+       
         local unit_type = players_unit_types[players_turn][i]
         if unit_type.cost <= players_gold[players_turn] then
           to_build = i
@@ -450,39 +457,39 @@ function ai_capture(u)
 end
 
 function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
-  -- draw marker on unit we're pathfinding for
+ 
   local tiles_to_explore = {}
   local tiles_to_explore = prioqueue.new()
-  tiles_to_explore:add(unit.p, manhattan_distance(unit.p, target)) -- unit position sorted by f_score as starting point
+  tiles_to_explore:add(unit.p, manhattan_distance(unit.p, target))
   local current_tile
 
-  local to_explore_parents = {}  -- map from point -> parent_point. starting node has no parent ;;
-  local to_explore_travel = {unit.travel}  -- map of tile's index in tiles_to_explore -> travel cost
+  local to_explore_parents = {} 
+  local to_explore_travel = {unit.travel} 
 
-  local g_scores = {}  -- map from point -> g_score
+  local g_scores = {} 
   g_scores[unit.p] = 0
 
   while #tiles_to_explore.values > 0 and #tiles_to_explore.values < 100 do
-    -- explore the next tile in tiles_to_explore
+   
 
 
-    -- set the current tile to be the tile in tiles_to_explore with the lowest f_score
-    -- current_tile is two parts {{x, y}, f_score}
+   
+   
     current_tile = tiles_to_explore:pop()
-    local current_t = current_tile[1] -- helper to get the current tile(without f_score)
+    local current_t = current_tile[1]
 
     if points_equal(current_t, target) then
-      -- goal reached. build and return path going backwards from the current node to each parent in the line
+     
       local return_path = {current_t}
       while point_in_table(current_t, to_explore_parents, true) do
 
         current_t = table_point_index(to_explore_parents, current_t)
 
         if point_in_table(current_t, return_path) then
-          -- bug detected. avoid crash
-          -- loop detected, return empty path
-          -- this fixes a nasty bug that happens some games on certain maps where somehow the
-          -- pathfinder sets a parent of a child to be the parent of its parent. ({0,1} => {1,0}, {1,0} => {0,1})
+         
+         
+         
+         
           return {unit.p}
         end
 
@@ -491,15 +498,15 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
       return return_path
     end
 
-    -- if debug then
-    --   rectfill(current_t[1], current_t[2], current_t[1] + 8, current_t[2] + 8, 0)
-    --   yield()
-    -- end
+   
+   
+   
+   
 
-    -- explore this tile's neighbors
+   
     local current_t_g_score = table_point_index(g_scores, current_t)
 
-    -- add all neighboring tiles to the explore list, while reducing their travel leftover
+   
     for t in all(get_tile_adjacents(current_t)) do
 
       local unit_at_t = get_unit_at_pos(t)
@@ -512,8 +519,8 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
         local new_g_score = current_t_g_score + tile_m + friendly_units_weight
  
         if new_g_score < table_point_index(g_scores, t) and tile_m < 255 then
-          -- if the new g_score is less than the old one for this tile, record it
-          -- and set the parent to be equal to the current tile
+         
+         
 
           local tiles_to_explore_point_i_or_nil = point_in_table(t, tiles_to_explore.values)
 
@@ -521,18 +528,18 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
           g_scores[t] = new_g_score
           local new_f_score = new_g_score + manhattan_distance(t, target)
 
-          -- in the wiki pseudocode it says to record the fscore even if the point is already in the to_explore list
-          -- we're not doing that and things seem fine. just keep an eye out if we see weird behavior
-          -- https://en.wikipedia.org/wiki/a*_search_algorithm#pseudocode
+         
+         
+         
           if not tiles_to_explore_point_i_or_nil then
-            -- if the point isn't already in tiles_to_explore, add it. 
+           
             tiles_to_explore:add(t, new_f_score)
           end
         end
       end
     end
   end
-  -- if no path was found, return an empty list
+ 
   return {unit.p}
 end
 
@@ -541,8 +548,8 @@ function manhattan_distance(p, target)
 end
 
 function ai_calculate_attack_value(u, u2, tile)
-  -- returns the estimated value of an attack as the difference between the gain and loss
-  -- tile is the tile we expect to attack from if we're melee
+ 
+ 
   local damage_done = u:calculate_damage(u2)
   local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
   local loss
@@ -553,7 +560,7 @@ function ai_calculate_attack_value(u, u2, tile)
     loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
   end
 
-  -- prioritize sniping capturing infantry/mech
+ 
   local s = get_struct_at_pos(u2.p)
   if s and u.index < 3 then
     gain += 5
@@ -562,9 +569,8 @@ function ai_calculate_attack_value(u, u2, tile)
   return gain - loss
 end
 
--- tile utilities
 function get_unit_at_pos(p)
-  -- returns the unit at pos, or returns nil if there isn't a unit there
+ 
   for unit in all(units) do
     if points_equal(p, unit.p) then
       return unit
@@ -581,31 +587,31 @@ function get_struct_at_pos(p, team, not_team, struct_type, not_struct_type)
 end
 
 function get_selection(p, include_resting)
-    -- returns a two part table where 
-    -- the first index is a flag indicating the selection 
-      -- 0: unit
-      -- 1: base
-      -- 2: tile
-    -- the second index is the selection.
+   
+   
+     
+     
+     
+   
 
   local unit = get_unit_at_pos(p)
   if unit and (include_resting or not unit.is_resting) then
-    -- selection is unit
+   
     return {0, unit}
   end
 
   local tile = mget(p[1] / 8, p[2] / 8)
 
   if fget(tile, 1) and fget(tile, 4) then
-    -- selection is base
+   
     return {1, tile}
   end
-  -- selection is tile
+ 
   return {2, tile}
 end
 
 function get_tile_info(tile)
-  -- returns the {tile name, its defense, its structure type(if applicable), and its team(if applicable)}
+ 
   if fget(tile, 1) then
     local team
     if fget(tile, 6) then team = players[1] elseif fget(tile, 7) then team = players[2] end
@@ -623,11 +629,11 @@ function get_tile_info(tile)
     elseif fget(tile, 5) then return {"cliff", 1.0}
     end
   end
-  return {"unmovable", 0} -- no info
+  return {"unmovable", 0}
 end
 
 function point_closest_to_p(points, p)
-  -- returns the point in points closest to p that doesn't have a unit in it
+ 
   local closest = points[1]
   local closest_d = 32767
   for p2 in all(points) do
@@ -641,10 +647,10 @@ function point_closest_to_p(points, p)
 end
 
 attack_coroutine = function()
-  -- coroutine action that plays out an attack
+ 
   currently_attacking = true
 
-  -- do attack
+ 
   selector_p = copy_v(attack_coroutine_u2.p)
   attack_timer = 0
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
@@ -654,7 +660,7 @@ attack_coroutine = function()
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
     yield()
   end
-  -- do response attack
+ 
   if attack_coroutine_u2.hp > 0 and not attack_coroutine_u1.ranged and not attack_coroutine_u2.ranged then
     selector_p = copy_v(attack_coroutine_u1.p)
     attack_timer = 0
@@ -667,7 +673,7 @@ attack_coroutine = function()
     end
   end
 
-  -- set units new states
+ 
   if attack_coroutine_u1.hp < 1 then
     explode_at = attack_coroutine_u1.p
     attack_coroutine_u1:kill()
@@ -695,7 +701,7 @@ end
 end_turn_coroutine = function()
   end_turn_timer = 0
 
-  -- play turn ending sfx and stop music
+ 
   sfx(7)
   music(-1, 300)
 
@@ -714,7 +720,7 @@ end_turn_coroutine = function()
     pal()
 
     if not played_music and end_turn_timer > 0.7 then
-      -- play music for new player on channels 0, 1, reserving channels 2 and 3 for sfx if needed
+     
       music(players_music[players_turn], 500, 12)
       played_music = true
     end
@@ -727,11 +733,11 @@ end
 function make_cam()
   cam = {}
 
-  -- start cam off at the selector position
+ 
   cam.p = {selector_p[1] - 64, selector_p[2] - 64}
 
   cam.update = function (self) 
-    -- move camera with the selector
+   
     local shake_x = 0
     local shake_y = 0
     if explode_at and attack_timer < 1 then
@@ -749,23 +755,22 @@ function make_cam()
 
 end
 
--- selector code
 function selector_init()
   selector_p = selector_p or {0, 0}
 
   selector_time_since_last_move = 0
 
-  -- movable tiles for selected unit
+ 
   selector_movable_tiles = {}
 
-  -- tiles that a movement arrow has passed through, in order from first to last
+ 
   selector_arrowed_tiles = {}
 
   selector_prompt_selected = 1
   selector_prompt_options = {}
-  selector_prompt_options_disabled = {} -- will appear marked out as disabled
+  selector_prompt_options_disabled = {}
 
-  -- map of selection_type -> prompt texts available
+ 
   selector_prompt_texts = {}
   selector_prompt_texts[2] = {}
   add(selector_prompt_texts[2], "rest")
@@ -773,60 +778,60 @@ function selector_init()
   add(selector_prompt_texts[2], "capture")
   selector_prompt_texts[4] = {}
   add(selector_prompt_texts[4], "end turn")
-  selector_prompt_texts[8] = {}  -- unit construction prompt texts filled in programmatically
+  selector_prompt_texts[8] = {} 
 
   for unit_type in all(players_unit_types[players_turn]) do
-    -- fill in unit type construction prompt texts
+   
     add(selector_prompt_texts[8], unit_type.cost .. "g: " .. unit_type.type)
   end
 
-  -- targets within attack range
+ 
   selector_attack_targets = {}
 
-  -- unit we're actively attacking. used in attack coroutine
-  -- selector_attacking_unit = nil
+ 
+ 
 end
 
 function selector_update()
-  -- only update selection if it's a human's turn
+ 
   if not players_human[players_turn] then return end
 
-  -- do selector movement
+ 
   if not selector_selecting or selector_selection_type == 0 then
     selector_move()
   end
 
   if selector_selecting then
-    -- do selecting
+   
 
-    -- get arrow key directional value. left or down = -1. up or right = +1
+   
     local arrow_val
     if btnp(2) or btnp(1) then arrow_val = 1 elseif btnp(3) or btnp(0) then arrow_val = -1 end
 
     if not btn(5) and selector_selection_type == 5 then
-      -- end checking unit attack range
+     
       selector_stop_selecting()
 
     elseif not btn(4) and selector_selection_type == 6 then
-      -- end checking enemy unit movement
+     
       selector_stop_selecting()
 
     elseif btnp4 then 
       if selector_selection_type == 0 then
-        -- do unit selection
+       
         local unit_at_pos = get_unit_at_pos(selector_p)
         if unit_at_pos and unit_at_pos.id ~= selector_selection.id then
-          -- couldn't move to position. blocked by unit
+         
           sfx(4)
         else
-          -- movement command issued
+         
           selector_selection:move(selector_arrowed_tiles)
 
-          selector_selection_type = 1  -- change selection type to unit movement
+          selector_selection_type = 1 
           return
         end
       elseif selector_selection_type == 2 then
-        -- do unit selection prompt
+       
         if selector_prompt_options[selector_prompt_selected] == 1 then
           selector_selection.is_resting = true
           sfx(1)
@@ -838,32 +843,32 @@ function selector_update()
           selector_stop_selecting()
         end
       elseif selector_selection_type == 3 then
-        -- do begin attacking
+       
 
-        -- set variables to be used in attack coroutine
+       
         attack_coroutine_u1 = selector_selection
         attack_coroutine_u2 = selector_attack_targets[selector_prompt_selected]
         active_attack_coroutine = cocreate(attack_coroutine)
         selector_selection_type = 7
       elseif selector_selection_type == 4 then
-        -- do menu selection prompt (end turn)
+       
 
         selector_stop_selecting()
         end_turn()
       elseif selector_selection_type == 8 then
-        -- do build unit at base/factory
+       
 
         if players_gold[players_turn] > 0 then
-          -- ensure player has gold to spend. this fixes a bug where infantry(default prompt selection) can be built when you have 0g
+         
           selector_selection:build(selector_prompt_selected)
           selector_stop_selecting()
         end
       end
     elseif btnp5 and selector_selection_type ~= 5 and selector_selection_type ~= 7 then
-      -- stop selecting
-      -- don't cancel if type is attack range selection or active attacking
-      if 0 < selector_selection_type and selector_selection_type < 4 then -- if selection type is 1,2, or 3
-        -- return unit to start location if he's moved
+     
+     
+      if 0 < selector_selection_type and selector_selection_type < 4 then
+       
       
         sfx(5)
         selector_selection:unmove()
@@ -873,17 +878,17 @@ function selector_update()
       selector_stop_selecting()
 
     elseif selector_selection_type == 2 or selector_selection_type == 8 then
-      -- do unit selection and base construction prompt
+     
       selector_update_prompt(arrow_val)
     elseif selector_selection_type == 3 then
-      -- unit attack selection
-      -- selector follows attack target
+     
+     
       selector_update_prompt(arrow_val)
       selector_p = selector_attack_targets[selector_prompt_selected].p
     end
 
   else
-    -- do not selecting
+   
 
     local selection = {}
     if btnp4 then
@@ -893,20 +898,20 @@ function selector_update()
     end
 
     if selection[1] == 0 then
-      -- do unit selection
+     
       selector_selection = selection[2]
       if btnp4 then
         sfx(2)
         selector_selecting = true
         if selector_selection.team == players_turn_team then
-          -- start unit selection
+         
           local movable_tiles = selector_selection:get_movable_tiles()
           merge_tables(movable_tiles[1], movable_tiles[2])
           selector_movable_tiles = movable_tiles[1]
           selector_selection_type = 0
           selector_arrowed_tiles = {selector_selection.p}
         else
-          -- start enemy unit selection
+         
           selector_movable_tiles = selector_selection:get_movable_tiles()[1]
           selector_selection_type = 6
         end
@@ -921,7 +926,7 @@ function selector_update()
         selector_selection_type = 5
       end
     elseif btnp4 and selection[1] == 1 and not get_unit_at_pos(selector_p) then
-      -- do base selection
+     
       local struct = get_struct_at_pos(selector_p, players_turn_team, nil, 3)
       if struct then
           selector_selecting = true
@@ -930,7 +935,7 @@ function selector_update()
       end
 
     elseif btnp4 then
-      -- do menu prompt
+     
       selector_selecting = true
       selector_start_menu_prompt()
     end
@@ -940,20 +945,20 @@ function selector_update()
 end
 
 function selector_draw()
-  -- only draw the selector if it's a human's turn
-  local draw_prompt  -- boolean flag for if we should draw the prompt
+ 
+  local draw_prompt 
   if players_human[players_turn] then 
     if selector_selecting then
-      -- draw unit selection ui
+     
 
-      local flip = last_checked_time * 2 % 2  -- used in selection sprite to flip it
+      local flip = last_checked_time * 2 % 2 
       if selector_selection_type == 0 or selector_selection_type == 5 or selector_selection_type == 6 then
 
-        -- select unit
+       
 
         for i, t in pairs(selector_movable_tiles) do
           if selector_selection_type == 5 then
-            -- draw in red if we're in unit attack range selection
+           
             pal(7, 8)
           end
           spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
@@ -963,12 +968,12 @@ function selector_draw()
         end
 
         if selector_selection_type == 0 then
-          -- draw movement arrow
+         
           selector_draw_movement_arrow()
         end
 
       elseif selector_selection_type == 3 then
-        -- draw attack prompt
+       
         for unit in all(selector_attack_targets) do
           pal(7, 8)
           spr(flip + 3, unit.p[1], unit.p[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
@@ -976,7 +981,7 @@ function selector_draw()
         end
 
       elseif selector_selection_type == 2 or selector_selection_type == 4 or selector_selection_type == 8 then
-        -- draw rest/attack/capture unit prompt, menu prompt, and unit construction prompts
+       
         draw_prompt = true
       elseif selector_selection_type == 7 then
         if costatus(active_attack_coroutine) == dead_str then
@@ -989,7 +994,7 @@ function selector_draw()
     end
     
     if selector_selection_type ~= 7 and selector_selection_type ~= 8 then
-      -- draw cursor if we're not fighting and we're not building units
+     
 
       local frame_offset = flr(last_checked_time * 2.4 % 2)
       local offset = 8 - frame_offset * 3
@@ -1002,7 +1007,7 @@ function selector_draw()
   if not currently_attacking then
 
     if last_checked_time % 3 > 1.5 then
-      -- draw unit hp
+     
       for u in all(units) do
         if u.hp < 10 then
           set_palette(u.team)
@@ -1012,7 +1017,7 @@ function selector_draw()
         end
       end
     else
-      -- draw structure capture left
+     
       for struct in all(structures) do
         if struct.capture_left < 20 then
           local rect_offset = 0
@@ -1026,7 +1031,7 @@ function selector_draw()
     end
   end
 
-  -- draw stats/selection bar at top of screen 
+ 
   local tile = mget(selector_p[1] / 8, selector_p[2] / 8)
   local tile_info = get_tile_info(tile)
   local struct_type = tile_info[3] 
@@ -1037,35 +1042,35 @@ function selector_draw()
   local team_name = players_turn_team
   if last_checked_time % 4 < 2 then team_name = players_co_name[players_turn] end
   if gold < 10 then gold = "0" .. gold end
-  rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
-  rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0)  -- portrait border
-  rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0)  -- team icon border
-  line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2)  -- background
-  rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2)  -- player's gold border
-  rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8) -- players' gold background
-  print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- player's gold
+  rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8) 
+  rectfill(x_corner + 1, y_corner + 1, x_corner + 18, y_corner + 18, 0) 
+  rectfill(x_corner + 17, y_corner + 1, x_corner + 26, y_corner + 9, 0) 
+  line(x_corner, y_corner + 20, x_corner + 80, y_corner + 20, 2) 
+  rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2) 
+  rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8)
+  print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3))
   pal()
-  print(team_name, x_corner + 29, y_corner + 3, 0) -- team name
-  print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
-  spr(players_co_icon[players_turn], x_corner + 2, y_corner + 2, 2, 2)  -- portrait
-  spr(team_icon[players_turn], x_corner + 19, y_corner + 2, 1, 1)  -- icon
+  print(team_name, x_corner + 29, y_corner + 3, 0)
+  print(tile_info[1], x_corner + 30, y_corner + 12, 0)
+  spr(players_co_icon[players_turn], x_corner + 2, y_corner + 2, 2, 2) 
+  spr(team_icon[players_turn], x_corner + 19, y_corner + 2, 1, 1) 
 
-  -- draw structure capture leftover
+ 
   local struct = get_struct_at_pos(selector_p)
   if struct then
-    -- change sprite to uncaptured structure so we don't draw their colors wrong
+   
     local type_to_sprite_map = {28, 29, 30}
     tile = type_to_sprite_map[struct_type]
-    rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0)  -- team icon border
+    rectfill(x_corner + 71, y_corner + 11, x_corner + 79, y_corner + 17, 0) 
     local capture_left = struct.capture_left
     if struct.capture_left < 10 then capture_left = "0" .. struct.capture_left end
-    print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- capture left
+    print(capture_left, x_corner + 72, y_corner + 12, 7 + (flr((last_checked_time*2 % 2)) * 3))
   end
-  spr(tile, x_corner + 20, y_corner + 11, 1, 1)  -- tile sprite
+  spr(tile, x_corner + 20, y_corner + 11, 1, 1) 
 
   if draw_prompt then
-    -- draw the prompt if the above flag was set
-    -- we draw it last so other things don't get drawn over it
+   
+   
     selector_draw_prompt()
   end
 
@@ -1085,19 +1090,19 @@ end
 function selector_start_unit_prompt()
   selector_selection_type = 2
 
-  selector_prompt_options = {1}  -- rest is in options by default
+  selector_prompt_options = {1} 
 
-  -- store the attack targets
+ 
   selector_attack_targets = selector_selection:targets()
   if #selector_attack_targets > 0 and (not selector_selection.ranged or not selector_selection.has_moved) then 
-    -- add attack to the prompt if we have targets
+   
     add(selector_prompt_options, 2)
   end
 
   local struct = get_struct_at_pos(selector_selection.p, nil, players_turn_team)
   if struct and selector_selection.index < 3 then
-    -- ensure we're an infantry or mech with `selector_selection.index < 3`
-    -- if we're on a structure that isn't ours and we're an infantry or a mech then add capture to prompt
+   
+   
     add(selector_prompt_options, 3)
   end
 
@@ -1125,7 +1130,7 @@ end
 function selector_start_menu_prompt()
   selector_selection_type = 4
 
-  selector_prompt_options = {1}  -- end turn is in options by default
+  selector_prompt_options = {1} 
   selector_prompt_selected = 1
 
   sfx(6)
@@ -1182,23 +1187,23 @@ end
 function selector_move()
   selector_time_since_last_move += delta_time
 
-  -- get x and y change as a vector from controls input
+ 
   local change = selector_get_move_input()
 
-  -- move to the position based on input
-  -- don't move if we're in any prompt selection_type
+ 
+ 
   if selector_time_since_last_move > 0.1 then
     if change[1] and change[2] then
-      -- if both inputs are down, perform move twice, once for x, once for y
+     
       local move_result = selector_move_to(change[1], 0)
       if move_result then
         selector_move_to(0, change[2])
       end
     elseif change[1] then
-      -- move x
+     
       selector_move_to(change[1], 0)
     elseif change[2] then
-      -- move y
+     
       selector_move_to(0, change[2])
     end
   end
@@ -1216,14 +1221,14 @@ function selector_get_move_input()
 end
 
 function selector_move_to(change_x, change_y)
-  -- moves the selector to a specific location
-  -- returns true on successful cursor movement
+ 
+ 
 
   local new_p = {selector_p[1] + change_x, selector_p[2] + change_y}
   local in_bounds = point_in_rect(new_p, {current_map.r[1]*8, current_map.r[2]*8, current_map.r[3]*8, current_map.r[4]*8})
 
   if selector_selecting and selector_selection_type == 0 then
-    -- if we're selecting a unit, keep selector bounded by unit's mobility
+   
     in_bounds = in_bounds and point_in_table(new_p, selector_movable_tiles)
   end
 
@@ -1231,7 +1236,7 @@ function selector_move_to(change_x, change_y)
     selector_p = new_p
 
     if selector_selecting and selector_selection_type == 0 then
-      -- if we crossover our arrow, delete all points in the arrow after the crossover
+     
       local point_i = point_in_table(new_p, selector_arrowed_tiles)
       if point_i then
         local new_arrowed_tiles = {}
@@ -1241,7 +1246,7 @@ function selector_move_to(change_x, change_y)
         selector_arrowed_tiles = new_arrowed_tiles
       end
 
-      -- add tile to the arrowed tiles list
+     
       add(selector_arrowed_tiles, new_p)
 
     end
@@ -1253,8 +1258,8 @@ function selector_move_to(change_x, change_y)
 end
 
 function selector_draw_movement_arrow()
-  -- draws a movement arrow during unit selection
-  -- directions = n: 0, s: 1, e: 2, w: 3
+ 
+ 
   local last_p = selector_arrowed_tiles[1]
   local last_p_direction
   local next_p
@@ -1288,7 +1293,7 @@ function selector_draw_movement_arrow()
     end
     next_p = selector_arrowed_tiles[i+1]
     if next_p then
-      -- take into account the next point so we can make curved arrows
+     
       if next_p[2] < current_p[2] then next_p_direction = 0 
       elseif next_p[2] > current_p[2] then next_p_direction = 1 
       elseif next_p[1] > current_p[1] then next_p_direction = 2 
@@ -1342,7 +1347,7 @@ function selector_draw_movement_arrow()
         end
       end
     else
-      -- draw arrowhead
+     
       if last_p_direction == 0 then
         sprite = arrowhead
       elseif last_p_direction == 1 then
@@ -1368,11 +1373,11 @@ end
 function make_war_map(r)
   war_map = {}
 
-  -- rect of bounds
+ 
   war_map.r = r
 
   war_map.draw = function(self)
-    -- fill background in with patterns
+   
     local x = self.r[1]*8
     local y = self.r[2]*8
     local w = self.r[3]*8
@@ -1387,21 +1392,21 @@ function make_war_map(r)
     fillp(0b0100000101000001)
     rectfill(x-16, y-16, x+w+23, y+h+23, fill_color)
     fillp(0)
-    -- fill with map bgcolor
+   
     rectfill(x-8, y-8, x+w+15, y+h+15, map_bg_color)
 
-    -- draw map tiles
+   
     map(self.r[1], self.r[2], self.r[1] * 8, self.r[2] * 8, self.r[3] + 1, self.r[4] + 1)
   end
 
   war_map.load = function(self)
-    -- set global structures to contain all structures
+   
     structures = {}
     for tile_y = self.r[2], self.r[2] + self.r[4]  do
       for tile_x = self.r[1], self.r[1] + self.r[3] do
         local tile_info = get_tile_info(mget(tile_x, tile_y))
         if tile_info[3] then
-          -- create structure of whatever type this tile is, and owned by whatever player owns this struct(if any)
+         
           add(structures, make_structure(tile_info[3], {tile_x * 8, tile_y * 8}, tile_info[4]))
         end
       end
@@ -1414,30 +1419,30 @@ end
 function make_structure(struct_type, p, team)
   local struct = {}
 
-  -- structure types:
-  -- 1: hq
-  -- 2: city
-  -- 3: base
+ 
+ 
+ 
+ 
   struct.type = struct_type
   struct.p = p
   struct.team = team
   struct.capture_left = 20
 
-  -- set structure sprite based on the structure type
+ 
   local struct_sprite
   if struct_type == 1 then 
     struct_sprite = 64
-    players_hqs[players_reversed[team]] = struct  -- add this hq to the list of hqs
+    players_hqs[players_reversed[team]] = struct 
     if team == players[1] then
       selector_p = p
     end
   elseif struct_type == 2 then struct_sprite = 65
   else struct_sprite = 66 end
 
-  -- components
+ 
   local active_animator
   if not team then 
-    -- set palette to unowned if we have no team (5 magic number for unowned)
+   
     team = 5 
     active_animator = false
   end
@@ -1463,7 +1468,7 @@ function make_structure(struct_type, p, team)
       self.animator.animation_flag = true
       self.capture_left = 20
       if self.type == 1 then
-        -- hq captured; end game
+       
         end_game(players_turn)
       end
     else
@@ -1487,7 +1492,7 @@ end
 function make_unit(unit_type_index, p, team)
   local unit = {}
 
-  -- inherit all properties from unit_type
+ 
   local unit_type = players_unit_types[players_reversed[team]][unit_type_index]
   for k, v in pairs(unit_type) do
     unit[k] = v
@@ -1501,15 +1506,15 @@ function make_unit(unit_type_index, p, team)
   unit.cached_animator_fps = 0.4
   unit.hp = 10
 
-  -- active flag is used by the ai so that we don't do ai twice for a dead unit
+ 
   unit.active = true
 
-  -- points to move to one at a time
+ 
   unit.cached_p = {}
   unit.movement_points = {}
-  unit.cached_sprite = unit.sprite -- cached sprite that we can revert to after changing it
+  unit.cached_sprite = unit.sprite
 
-  -- components
+ 
   unit.animator = make_animator(
     unit,
     unit.cached_animator_fps,
@@ -1536,28 +1541,28 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.get_movable_tiles = function(self, travel_offset, add_enemy_units_to_return)
-    -- returns two tables
-    -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
-    -- the second table is the rest of the tiles they could move to if their own units weren't occupying them. 
+   
+   
+   
 
-    -- travel_offset increases the distance of the search by one. you can determine areas of attack of setting this to 1
-    -- if we want to see the enemy units we can attack, we should also set `add_enemy_units_to_return` to true. 
+   
+   
     travel_offset = travel_offset or 0
 
     local current_tile
-    local tiles_to_explore = {{self.p, self.travel + travel_offset}}  -- store the {point, travel leftover}
+    local tiles_to_explore = {{self.p, self.travel + travel_offset}} 
     local movable_tiles = {}
     local tiles_with_our_units = {}
-    local explore_i = 0  -- index in tiles_to_explore of what we've explored so far
+    local explore_i = 0 
 
     while #tiles_to_explore > explore_i do
       explore_i += 1
       current_tile = tiles_to_explore[explore_i]
 
-      -- explore this tile's neighbors
-      local current_t = current_tile[1] -- helper to get the current tile(without travel)
+     
+      local current_t = current_tile[1]
 
-      -- if we haven't already added this tile to be returned, add it to be returned
+     
       local has_added_to_movable_tiles = false
       for t2 in all(movable_tiles) do
         has_added_to_movable_tiles = points_equal(current_t, t2)
@@ -1571,13 +1576,13 @@ function make_unit(unit_type_index, p, team)
         end
       end
 
-      -- add all neighboring tiles to the explore list, while reducing their travel leftover
+     
       for t in all(get_tile_adjacents(current_t)) do
 
-        -- check the travel reduction for the tile's type
+       
         local travel_left = current_tile[2] - self:tile_mobility(mget(t[1] / 8, t[2] / 8))
 
-        -- see if we've already checked this tile. if we have and the cost to get to it was lower, don't explore the new tile.
+       
         local checked = false
         for t2 in all(tiles_to_explore) do
 
@@ -1607,7 +1612,7 @@ function make_unit(unit_type_index, p, team)
     self.movement_points = points
     self.animator.fps = 0.1
 
-    -- used by selector to return unit to starting point by pressing btn(5)
+   
     self.has_moved = #points > 1
 
     sfx(self.moveout_sfx)
@@ -1620,26 +1625,26 @@ function make_unit(unit_type_index, p, team)
     local next_p = self.movement_points[self.movement_i]
 
     if next_p then
-      -- next waypoint found. start moving to it
+     
 
       local reached = points_equal(self.p, next_p)
 
       if reached then
-        -- reached the goal. on to the next one
+       
         self.movement_i += 1
         return self:update_move()
       end
 
-      -- reset sprite to default state
+     
       self.animator.sprite = self.cached_sprite
 
       if next_p[2] > self.p[2] then 
-        -- animate sprite walking forwards
+       
         self.animator.sprite = self.cached_sprite + 32
         y_change = 1
       elseif next_p[2] < self.p[2] then 
         y_change = -1
-        -- animate sprite walking backwards
+       
         self.animator.sprite = self.cached_sprite + 16
       elseif next_p[1] > self.p[1] then 
         self.animator.flip_sprite = false
@@ -1658,9 +1663,9 @@ function make_unit(unit_type_index, p, team)
       end
 
     else
-      -- no more points left. stop moving
+     
       if players_human[players_turn] then
-        selector_start_unit_prompt()  -- change to select type unit prompt
+        selector_start_unit_prompt() 
       end
 
       self:cleanup_move()
@@ -1686,13 +1691,13 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.unmove = function(self)
-    -- un-does a move, moving the unit back to its start location
+   
     self.p = self.cached_p
     self:cleanup_move()
   end
 
   unit.cleanup_move = function(self)
-    self.animator.sprite = self.cached_sprite  -- reset animator to default state
+    self.animator.sprite = self.cached_sprite 
     self.animator.fps = self.cached_animator_fps
     self.animator.flip_sprite = false
     self.is_moving = false
@@ -1702,7 +1707,7 @@ function make_unit(unit_type_index, p, team)
   end
 
   unit.tile_mobility = function(self, tile)
-    -- returns the mobility cost for traversing a tile for the unit's mobility type
+   
     if fget(tile, 0) then
       if fget(tile, 1) then return 1
       elseif fget(tile, 6) then
@@ -1716,10 +1721,10 @@ function make_unit(unit_type_index, p, team)
         if self.mobility_type == 0 then return 2
         elseif self.mobility_type == 1 then return 1
         end
-        -- else return 255 end
+       
       end
     elseif fget(tile, 1) then return 1 end
-    return 255 -- unwalkable if all other options are exhausted
+    return 255
   end
 
   unit.ranged_attack_tiles = function(self, p)
@@ -1765,7 +1770,6 @@ function make_unit(unit_type_index, p, team)
   return unit
 end
 
--- components
 function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset, draw_shadow, animation_flag)
   local animator = {}
   animator.parent = parent
@@ -1775,14 +1779,14 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   animator.palette = palette
   if animation_flag ~= nil then animator.animation_flag = animation_flag else animator.animation_flag = true end
   if draw_offset then animator.draw_offset = draw_offset else animator.draw_offset = {0, 0} end
-  animator.draw_shadow = draw_shadow  -- draws a shadow on sprites if true
+  animator.draw_shadow = draw_shadow 
 
   animator.time_since_last_frame = 0
   animator.animation_frame = 0
   animator.flip_sprite = false
 
   animator.draw = function(self)
-    -- update and animate the sprite
+   
     self.time_since_last_frame += delta_time
     if self.animation_flag and self.time_since_last_frame > self.fps then
       self.animation_frame = (self.animation_frame + 1) % 2
@@ -1796,16 +1800,16 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
       animation_frame = self.sprite
     end
 
-    -- draw sprite
+   
     if(self.palette) then
       set_palette(self.palette)
     end
 
     if self.draw_shadow then
-      -- draw shadow
+     
       outline_sprite(animation_frame, 0, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
     else
-      -- draw sprite normally
+     
       spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1, 1, self.flip_sprite)
     end
 
@@ -1817,7 +1821,6 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
 
 end
 
--- save/loading data functions
 function peek_increment()
   local v = peek(memory_i)
   memory_i += 1
@@ -1830,22 +1833,22 @@ function poke_increment(poke_value)
 end
 
 function load_string(n)
-  -- reads a string from memory and increments the memory_i counter by its length
+ 
   local str = ""
   for i = 1, n do
     local charcode_val = chr(peek_increment())
     str = str .. charcode_val
   end
-  -- i don't know what this returns, but it's not a string. that's fine. it works. 
+ 
   return str
 end
 
 function load_assets()
 
-  -- load all 8 unit types for players 1 and 2
+ 
   for i=1, 2 do
 
-    -- load player data
+   
     players_human[i] = peek_increment() == 1
     players_co_name[i] = load_string(10)
     players[i] = team_index_to_palette[peek_increment()]
@@ -1854,7 +1857,7 @@ function load_assets()
     players_music[i] = peek_increment()
 
     for j=1, 7 do
-      -- load unit data
+     
       local u = {}
       u.index = peek_increment()
       u.type = load_string(10)
@@ -1864,7 +1867,7 @@ function load_assets()
       u.cost = peek_increment()
       u.range_min = peek_increment()
       u.range_max = peek_increment()
-      u.ranged = u.range_min > 0  -- add helper variable to determine if unit is ranged
+      u.ranged = u.range_min > 0 
       u.luck_max = peek_increment()
       u.capture_bonus = peek_increment()
       u.struct_heal_bonus = peek2(memory_i)
@@ -1877,7 +1880,7 @@ function load_assets()
       u.damage_chart = {}
       for k=1, 7 do
         local v = peek4(memory_i)
-        memory_i += 4  -- value is 4byte float. increment by 4
+        memory_i += 4 
 
         add(u.damage_chart, v)
       end
@@ -1886,15 +1889,15 @@ function load_assets()
     end
   end
 
-  players_reversed = {}  -- create a global reverse index for getting player index by team
+  players_reversed = {} 
   players_reversed[players[1]] = 1
   players_reversed[players[2]] = 2
 
-  -- loads war map
+ 
   current_map = make_war_map({peek_increment(), peek_increment(), peek_increment(), peek_increment()})
   map_bg_color = peek_increment()
 
-  -- load map data from external source
+ 
   if peek_increment() == 1 then
     reload(0x2000, 0x2000, 0x1000, 'loader.p8')
   end
@@ -1902,7 +1905,6 @@ function load_assets()
 end
 
 
--- palette functions
 function set_palette(palette)
   if palette == palette_orange then
     return
@@ -1918,7 +1920,7 @@ function set_palette(palette)
     pal(9, 14)
     pal(8, 2)
     pal(2, 10)
-  elseif palette == 5 then -- un-owned palette. 5 is magic number we use
+  elseif palette == 5 then
     pal(9, 13)
     pal(8, 6)
     pal(2, 5)
@@ -1929,7 +1931,6 @@ function set_palette(palette)
   end
 end
 
--- vector functions
 function points_equal(p1, p2)
   return p1[1] == p2[1] and p1[2] == p2[2]
 end
@@ -1939,12 +1940,10 @@ function copy_v(v)
 end
 
 
--- rect functions
 function point_in_rect(p, r)
   return p[1] >= r[1] and p[1] <= r[1] + r[3] and p[2] >= r[2] and p[2] <= r[2] + r[4]
 end
 
--- table functions
 function sort_table_by_f(a, f)
   for i=1,#a do
     local j = i
@@ -1956,30 +1955,30 @@ function sort_table_by_f(a, f)
 end
 
 function point_in_table(p, t, keys)
-  -- returns the index of the first point that matches if it is in the table
-  -- otherwise returns nil
+ 
+ 
 
-  -- if keys is true we instead compare p against the table's keys and return the value.
+ 
   for i, p2 in pairs(t) do
     if keys then 
-      if points_equal(p, i) then return p2 end  -- compare p with keys
+      if points_equal(p, i) then return p2 end 
     else
-      if points_equal(p, p2) then return i end  -- compare p with values
+      if points_equal(p, p2) then return i end 
     end
   end
 end
 
 function table_point_index(t, p)
-  -- works like table[key] except key can be a point
-  -- otherwise returns nil
+ 
+ 
   for k, v in pairs(t) do
     if points_equal(p, k) then return v end
   end
-  return 32767  -- return (essentiall) infinity if the point isn't in the table. this is for pathfinding
+  return 32767 
 end
 
 function merge_tables(t1, t2)
-  -- merges the second table into the first
+ 
   i = #t1 + 1
   for _, v in pairs(t2) do 
     t1[i] = v 
@@ -2010,18 +2009,18 @@ function remove(list, pos)
 end
 
 function outline_sprite(n,col_outline,x,y,flip_x,sprite_palette)
-  -- reset palette to black
+ 
   for c=1,15 do
     pal(c,col_outline)
   end
-  -- draw outline
+ 
   for xx=-1,1 do
     for yy=-1,1 do
       spr(n,x+xx,y+yy,1,1,flip_x,flip_y)
     end
   end
   pal()
-  -- draw final sprite
+ 
   set_palette(sprite_palette)
   spr(n,x,y,1,1,flip_x,flip_y) 
   pal()
@@ -2033,7 +2032,7 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
   local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
   local y_pos = center_pos[2]
 
-  -- draw message background rectangle
+ 
   rectfill(
     x_pos - 2,
     y_pos - 2,
@@ -2050,7 +2049,7 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
       2)
   end
 
-  -- draw message
+ 
   print(msg, x_pos, y_pos - 1, 0)
 end
 
@@ -2061,8 +2060,6 @@ function get_tile_adjacents(p)
      {p[1] - 8, p[2]}}
 end
 
--- priority queue code
--- edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
 prioqueue = {}
 prioqueue.__index = prioqueue
 
@@ -2204,38 +2201,38 @@ ff1ff1f08f1f17770995990089555598295555920818180009188190899999988999977700000888
 0fffff7008fff757829592802855558228511582822222802899998228911982088887570000000000000000000000006ccccccccccccccccccccc635ccccc63
 02877777028886662899982082899828825555282899982082988928828998280288866600000000000000000000000036ccccccccccccccccccc6335ccccc63
 0000800000002000828082802829928228299282828082802800008228299282000020000000000000000000000000003366666666666666666663335ccccc63
-103716d69600000000000010ee0cf11096e66616e6472797000001004010000010000000e0e06100000850000008400033331000000810000008000000082000
-9991000020d656368600000000000011103030000010000000e0e071000008600000085000000880000000700000085000000880000008100030275636f6e600
-0000000021209040000010000000d001810099997000cccc6000cccc3000000840009999000000085000999100004016274796c6c65627970051306060203010
-000000d0f0b10000009000000880000000800000087000000070000000800000084000504716e6b600000000000031307070000010000000d0f0910000083000
-0000300000088000000070000008500000088000000810006027f636b6564700000000612060f0305010000000c001c100000890000000900000009000000080
-0000088000000880000008500070771627024716e6b6000041306001000010000000b011a1000008a000000890000008a0000008a000000880000008a0000008
-50000016c6563696160000000020ec0d001096e66616e6472797000001004010000010000000e0e0610000085000000840003333100000081000000800000008
-20009991000020d656368600000000000011103030000010000000e0e071000008600000085000000880000000700000085000000880000008100030275636f6
-e6000000000021209040000010000000d001810099997000cccc6000cccc3000000840009999000000085000999100004016274796c6c6562797005130606020
-3010000000d0f0b10000009000000880000000800000087000000070000000800000084000504716e6b600000000000031307070000010000000d0f091000008
-30000000300000088000000070000008500000088000000810006027f636b6564700000000612060f0305010000000c001c10000089000000090000000900000
-00800000088000000880000008500070771627024716e6b6000041306001000010000000b011a1000008a000000890000008a0000008a000000880000008a000
-00085000f0e0f0f030000000000031307070000010000000d0f0910000083000000030000008800000087000000070000008500000088000000810007027f636
-b6564700000000612060f0305010000000c001c100000890000000900000009000000080000000800000088000000880000008500080771627024716e6b60000
-41306001000010000000b011a1000008a000000890000008a0000008a0000008a000000880000008a00000085000f0e0f0f03000000000000000000000000000
+103716d69600000000000010ee0cf11096e66616e647279700000100401000001000000050e06100000850000008400033331000000810000008000000082000
+9991000020d656368600000000000011103030000010000000f0e071000008600000085000000880000000700000085000000880000008100030275636f6e600
+00000000212090400000100000002101810099997000cccc6000cccc3000000840009999000000085000999100004016274796c6c65627970051306060203010
+00000021f0b10000009000000880000000800000087000000070000000800000084000504716e6b60000000000003130707000001000000001f0910000083000
+0000300000088000000070000008500000088000000810006027f636b6564700000000612060f03050100000000101c100000890000000900000009000000080
+0000088000000880000008500070771627024716e6b6000041306001000010000000c011a1000008a000000890000008a0000008a000000880000008a0000008
+50000016c6563696160000000020ec0d001096e66616e647279700000100401000001000000050e0610000085000000840003333100000081000000800000008
+20009991000020d656368600000000000011103030000010000000f0e071000008600000085000000880000000700000085000000880000008100030275636f6
+e60000000000212090400000100000002101810099997000cccc6000cccc3000000840009999000000085000999100004016274796c6c6562797005130606020
+301000000021f0b10000009000000880000000800000087000000070000000800000084000504716e6b60000000000003130707000001000000001f091000008
+30000000300000088000000070000008500000088000000810006027f636b6564700000000612060f03050100000000101c10000089000000090000000900000
+00800000088000000880000008500070771627024716e6b6000041306001000010000000c011a1000008a000000890000008a0000008a000000880000008a000
+00085000f0e0f0f03000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000777777000000000000000000000000000000000000000000777770000000000000700000001000000000000000000000000000000000000000000000000
+00007dddddd700000000000000000000000000000000000000077ddddd7700000000007700000017000000000000000000000000000000000000000000000000
+0007dddddddd700000000000000000000000000000000000007ddddddddd700000000777000001d7000000000000000000000000000000000000000000000000
+007dddddddddd7000000000000000000000000000000000007dddd111dddd7000000777d00001dd7000000000000000000000000000000000000000000000000
+07dddddddddddd777777777777777777777777777777777777ddd10001ddd700000777dd0001ddd7000000000000000000000000000000000000000000000000
+071111dddddddd822282228822882288c9c9c999c999cc99cddd1000007ddd1000777ddd001dddd7000000000000000000000000000000000000000000000000
+000000dddddddd828288288288828828c9c9c9c9c9c9c9cccdd100000007dd700777dddd01ddddd7000000000000000000000000000000000000000000000000
+000000dddddddd822288288288828828c9c9c999c99cc999cdd100000007dd10777ddddd7dddddd7000000000000000000000000000000000000000000000000
+00000ddddddddd828888288288828828c999c9c9c9c9ccc9cdd100000007dd100111dddd07ddddd7000000000000000000000000000000000000000000000000
+00000ddddddddd828882228822882288c999c9c9c9c9c99ccddd1000007ddd1000111ddd007dddd7000000000000000000000000000000000000000000000000
+77777ddddddddd11111111111111111111111111111111111dddd70007ddd100000111dd0007ddd7000000000000000000000000000000000000000000000000
+1dddddddddddd1000000000000000000000000000000000001dddd777dddd1000000111d00007dd7000000000000000000000000000000000000000000000000
+01dddddddddd100000000000000000000000000000000000001ddddddddd100000000111000007d7000000000000000000000000000000000000000000000000
+001dddddddd100000000000000000000000000000000000000011ddddd1100000000001100000077000000000000000000000000000000000000000000000000
+0001dddddd1000000000000000000000000000000000000000000111110000000000000100000007000000000000000000000000000000000000000000000000
+00001111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 888888803333333000005000000500000000000000000000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
 899999803bbbbb300005750000575000000777777000fbb000002333333333330002277ffffff200000000faafff22025570000000000070011c111111111111
 899899803b333b30000565555566d5000077777777333300000233333333333300277fffffffff2000fffffaaaaaf222500707077700700011c1c11111111111
@@ -2269,151 +2266,151 @@ b6564700000000612060f0305010000000c001c10000089000000090000000900000008000000080
 00000ffffff0000000000567777dd50000002fff222ff0000080088222220002000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
 000000000000000000000567777dd500000002ffffff2000088228882222228200002aafffffffaf02222222222220000022222ffffff200000002ffff202020
 __label__
-70000000777070707770077077707770000077707770077007707070777077700770000070707770777070000000000000000000000000000000000000000000
-07000000700070707070707070700700000070700700700070707070707070707000000070700700777070000000000000000000000000000000000000000000
-00700000770007007770707077000700000077700700700070707070777077007770000077700700707070000000000000000000000000000000000000000000
-07000000700070707000707070700700000070000700700070707770707070700070000070700700707070000000000000000000000000000000000000000000
-70000000777070707000770070700700000070007770077077007770707070707700070070700700707077700000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-66606000666066600660666000000660666066606660606066606660000066600000600066606660666060000000666066606660066066600000000000000000
-60606000600060606000600000006000606060600600606060606000000060600000600060606060600060000000600006006060600006000000000000000000
-66606000660066606660660000006000666066600600606066006600000066600000600066606600660060000000660006006600666006000000000000000000
-60006000600060600060600000006000606060000600606060606000000060600000600060606060600060000000600006006060006006000000000000000000
-60006660666060606600666000000660606060000600066060606660000060600000666060606660666066600000600066606060660006000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-07000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-07000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccc444444444444444444444444444444444444444444cccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccccccccccccccccccc44333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccc444333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccc44ccccc444444444444444443333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000cccccccccccccc445ccccc633333333333333333333333333333333333333333333333333333333322ccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccc4445ccccc6333333333333333333333333333333333333333333333333333333333222cccccccccccccccccccccccccccccccccccc
-000000000ccccccc4444444435ccccc6333333333333333333333333333333333333333333333333333333333324444444cccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63336666666666666666666666666666666666666666666666666663333333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63366666666666666666666666666666666666666666666666666666333333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666666666666666666666666666666666666666666666666666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666666776677667766776677667766776677667766776677667666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666666666666666666666666666666666666666666666666666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666766666666666666666666666666666666666666666666666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666766666666666666666666666666666666666666666666666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63666666633333333333333333333333333333333333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc6366666663333ff333333ff333333ff3333333333333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc636888886333f4423333f4423333f442333773377333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc638999998333f4423333f4423333f442333733337333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63899999983f4442233f4442233f4442233333333333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63222222233f4424233f4424233f4424233333333333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63ffff1f633f4244233f4244233f4244233733377777333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63688fff73b4b4b24bb4b4b24bb4b4b24b3773375533333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc63628777773bbbbbb33bbbbbb33bbbbbb33333375673333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333ff3335ccccc6366666663333ff333333ff33333b33b333355575567555555566666555555555552ccccccccccccccccccccccccccccc
-000000000cccccc4433f442335ccccc636666666333f4423333f442333bbb5bb335ccc7cc567cccccc66666ccccccccccccccccccccccccccccccccccccccccc
-000000000cccccc4433f442335ccccc636667666333f4423333f442333bb5bb535cccccccc565cccc5667665cccccccccccccccccccccccccccccccccccccccc
-000000000cccccc443f4442235ccccc63666766633f4442233f444223bb5b5bb55ccccccccc55ccccc66766ccccccccccccccccccccccccccccccccccccccccc
-000000000cccccc443f4424235ccccc63666666633f4424233f4424233b5bbb535ccccccccccccccc5666665cccccccccccccccccccccccccccccccccccccccc
-000000000cccccc443f4244235ccccc63666666633f4244233f424423bbb5bbb55cccccccccccccccc66666ccccccccccccccccccccccccccccccccccccccccc
-000000000cccccc44b4b4b24b5ccccc6366676663b4b4b24bb4b4b24b334334335cccccc666666666666766666666666662ccccccccccccccccccccccccccccc
-000000000cccccc443bbbbbb35ccccc63666766633bbbbbb33bbbbbb3333333335ccccc6333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccc44333333335ccccc636666666333333333333ff33333b33b335ccccc6333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccc4555555555cccccc63666666633333333333f442333bbb5bb35ccccc6333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccc63666766633333333333f442333bb5bb535ccccc6333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccc6366676663333333333f444223bb5b5bb55ccccc6333333333666766633333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccc6366666663333333333f4424233b5bbb535ccccc6333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccccccccccc6366666663333333333f424423bbb5bbb55ccccc6333333333666666633333333322ccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccc6336667666333333333b4b4b24b334334335ccccc63333333336667666333333333222cccccccccccccccccccccccccccc
-000000000cccccc46666666666666633366676663333333333bbbbbb3333333335ccccc63333333336667666333333333324444444cccccccccccccccccccccc
-000000000cccccc443333333333333333666666633333333333333333333333335ccccc633333333366666663333333333333333322ccccccccccccccccccccc
-000000000cccccc443333333333333333666666666666666666666666666666665c5c5c666666666666666663333333333333333322ccccccccccccccccccccc
-000000000cccccc44333333333333333366676666666666666666666666666666666666666666666666676663333333333333333322ccccccccccccccccccccc
-000000000cccccc44333333333333333366676666666666666666666666666666666666666666666666676663333333333333333322ccccccccccccccccccccc
-000000000cccccc44333333333333333366667677667766776677667766776677667766776677667766766663333333333333333322ccccccccccccccccccccc
-000000000cccccc44333333333333333366666666666666666666666666666666666666666666666666666663333333333333333322ccccccccccccccccccccc
-000000000cccccc44333333333333333336666666666666666666666666666666666666666666666666666633333333333333333322ccccccccccccccccccccc
-000000000cccccc443333333333333333336666666666666666666666666666665c5c5c666666666666666333333333333333333322ccccccccccccccccccccc
-000000000cccccc445555555333333333333333333333333333333333333333335ccccc633333333333333333333333333555555522ccccccccccccccccccccc
-000000000cccccc442222444533333333333333333333333333333333333333335ccccc633333333333333333333333335222222222ccccccccccccccccccccc
-000000000cccccc422222224433333333333333333333333333333333333333335ccccc633333333333333333333333332222222222ccccccccccccccccccccc
-000000000ccccccc22222224433333333333333333333333333333333333333335ccccc63333333333333333333333333222222222cccccccccccccccccccccc
-000000000ccccccccccccc24433333333333333333333333333333333333333335ccccc63333333333333333333333333222cccccccccccccccccccccccccccc
-000000000cccccccccccccc4433333333333333333333333333333333333333335ccccc6333333333333333333333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccc4433333333333333333333333333333333333333335ccccc6333333333333333333333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccc4433333333333333333333333333333333333333335ccccc6333333333333333333333333322ccccccccccccccccccccccccccccc
-000000000cccccccccccccc4455555555555555555555555555555555555555555ccccc6555555555555555555555555522ccccccccccccccccccccccccccccc
-000000000cccccccccccccc4422222222222222222222222222222222222222222ccccc2222222222222222222222222222ccccccccccccccccccccccccccccc
-000000000cccccccccccccc4222222222222222222222222222222222222222222ccccc2222222222222222222222222222ccccccccccccccccccccccccccccc
-000000000ccccccccccccccc222222222222222222222222222222222222222222ccccc222222222222222222222222222cccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-000000000ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+8888888888888888888888888888888888888888888888888888888888888888888888888888888888ccccc6333b33b3333b33b3322ccccccc28888888888888
+8000000000000000000000000008888888888888888888888888888888888888888888888888888888ccccc633bbb5bb33bbb5bb322ccccccc28777877788778
+8000888888888880000888888808888888888888888888888888888888888888888888888888888888ccccc633bb5bb533bb5bb5322ccccccc28787878787888
+8002888888888888800899999808880080008000800088888888888888888888888888888888888888ccccc63bb5b5bb5bb5b5bb522ccccccc28787877787888
+8028888888888288780899899808808880808000880888888888888888888888888888888888888888ccccc633b5bbb533b5bbb5322ccccccc28787878787878
+8087888811188827880898989808800080008080880888888888888888888888888888888888888888ccccc63bbb5bbb5bbb5bbb522ccccccc28777877787778
+8088781133318882880899899808888080808080880888888888888888888888888888888888888888ccccc63334334323343343322ccccccc28888888888888
+8088813333331888280899999808800880808080800088888888888888888888888888888888888888ccccc63330000223333333322ccccccc22222222222222
+808813222ffff288820888888808888888888888888888888888888888888888888888888888888888ccccc633002100003b33b3322ccccccccccccccccccccc
+8082226722ff2628880000000008888888888888888888888888888888888888888888888888888888ccccc60002220210bbb5bb322ccccccccccccccccccccc
+808227707fff7072880888888888888888888888888888888888888888888888888888888888888888ccccc60222229780bb5bb5322ccccccccccccccccccccc
+802ff20c7fff0c62280888555588888888888888888888888888888888888888888888800000000088ccccc60222299180b5b5bb522ccccccccccccccccccccc
+80ffff222fff222ff8088d7575d8888008000800080808888088888880888888808888807700777088ccccc60222992220b5bbb5322ccccccccccccccccccccc
+802ffffffff2fffff208ddd55ddd880888808880880808880008888800088888000888800700707088ccccc60222882920bb5bbb522ccccccccccccccccccccc
+8022ffffffffffff2208d7d57d7d880888808880880008000000080000000800000008800700707088ccccc60222002220343343322ccccccccccccccccccccc
+80002ffffffffff22208ddd55ddd880888808880888808800000888000008880000088800700707088ccccc60000000000333333322ccccccccccccccccccccc
+800002fff222ff222208d7d57d7d888008000880880008808880888088808880888088807770777088ccccc6333b33b3333b33b3322ccccccccccccccccccccc
+80000002ffff20202008ddd55ddd888888888888888888888888888888888888888888800000000088ccccc633bbb5bb33bbb5bb322ccccccccccccccccccccc
+80000000000000000008ddd55ddd888888888888888888888888888888888888888888888888888888ccccc633bb5bb533bb5bb5322ccccccccccccccccccccc
+8888888888888888888888888888888888888888888888888888888888888888888888888888888888ccccc63bb5b5bb5bb5b5bb522ccccccccccccccccccccc
+2222222222222222222222222222222222222222222222222222222222222222222222222222222225ccccc633b5bbb533b5bbb5322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333666666633333333333333333333333335ccccc63bbb5bbb5bbb5bbb522ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333666766633333333333333333333333335ccccc63334334333343343322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333666766633333333333333333333333335ccccc63333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333666766633333333333333333333333335ccccc6333b33b3333b33b3322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44555555555555777777666655555555555555555555555555cccccc633bbb77777bbb5bb322ccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccccc7dddddd7666cccccccccccccccccccccccccccccccc633b77ddddd775bb5322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccccc7dddddddd7665ccccccccccccccccccccccccccccccc63b7ddddddddd75bb522ccccccccccccccccccccc
+cccccccccccccccccccccccccccccccccccccccccc7dddddddddd76cccccccccccccccccccccccccccccccc637dddd111dddd7b5322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccc7dddddddddddd777777777777777777777777777777777777ddd1bb51ddd7bb522ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccccccccccccc71111dddddddd822282228822882288c9c9c999c999cc99cddd1343337ddd13322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc446666666666666dddddddd828288288288828828c9c9c9c9c9c9c9cccdd133333337dd73322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333dddddddd822288288288828828c9c9c999c99cc999cdd133333337dd13322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333ddddddddd828888288288828828c999c9c9c9c9ccc9cdd133333337dd13322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333ddddddddd828882228822882288c999c9c9c9c9c99ccddd1333337ddd13322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333377777ddddddddd11111111111111111111111111111111111dddd73337ddd133322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333331dddddddddd9d9699939993399399933993993333339993331d999777dddd133322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333331ddddddddd9192933393939333393393939393333395953331dd9dddddd1333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333331dddddddd9292993399339993393393939393333395953333999dddd113333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333331dddddd1999999339393339339339393939333dd959ddd339311111333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333331111117997999969696996699969966969666d6999d69669993333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333399922999666666666666666666666666ddd55ddd666666333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333397927979666666666666666666666666d6d56d6d666666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333399922999667766776677667766776677ddd55ddd667666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333399922999666666666666666666666666ddd55ddd666766633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333366666666666666666666666633333333666666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333366666666666666666666666633333333666766633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333333333333666766633333333322ccccccccccccccccccccc
+cccccccccccfccccccccccccccccccc44333ff333333ff333333ff333333ff333333ff333333ff33333b33b33666666633333333322ccccccccccccccccfcccc
+ccccccccccf44ccfccccccccccccccc4433f4423333f4423333f4423333f4423333f4423333f442333bbb5bb3666666633333333322cccccccccccccccf44ccf
+ccccccccc72427f42cccccccccccccc4433f4423333f4423333f4423333f4423333f4423333f442333bb5bb53666766633333333322cccccccccccccc72427f4
+cccccccccc727c722cccccccccccccc443f4442233f4442233f4442233f4442233f4442233f444223bb5b5bb5666766633333333322ccccccccccccccc727c72
+ccccccccccc7f4c77cccccccccccccc443f4424233f4424233f4424233f4424233f4424233f4424233b5bbb53666666633333333322cccccccccccccccc7f4c7
+cccccccccc724427ccccccccccccccc443f4244233f4244233f4244233f4244233f2222233f424423bbb5bbb5666666633333333322ccccccccccccccc724427
+ccccccccccc7227cccccccccccccccc44b4b4b24bb4b4b24bb4b4b24bb4b4b24bb482824bb4b4b24b33433433666766633333333322cccccccccccccccc7227c
+cccccccccccc77ccccccccccccccccc443bbbbbb33bbbbbb33bbbbbb33bbbbbb399922999300000b333333333666766633333333322ccccccccccccccccc77cc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333b33b33989289890098800333333333666666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333333333333bbb5bb3999229900992780006666666666666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333333333333bb5bb53989289809992185506666666666766633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333333333333bb5b5bb5999229909999995506666666666766633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333333333333333333333b5bbb53999229902222222006776677667666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333333333333333333333bbb5bbb5335555302898989206666666666666633333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333433433336565300000000006666666666666333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333000000033000003333333333000000000ccccc0066666666666663333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333008888800006cc0066666666076666666666666c000000033333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333308999998006657c0006666660760066000666666c00998003333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333308999999066651c5506666660866066060655555009997800033333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333302222222066666655067766702660660606ff1f0009991855033333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330ffff1f005555555006666660f660660606cfff7002292220033333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330088fff7056c6c6c5066666600600060006c7777709292920333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333028777700555555006666666766666666600c00002282220000000033333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333000000000000000000000003770000770000003000000000088888003333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333300ccccc0033b33b300ccccc000ccccc00777773300ccccc0089999980033ff33322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330c66666c00bbb5bb0c66666c0066666c075544230c66666c00999999803f4423322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330c666666c0bb5bb50c666666c0666666c75674230c666666c0222222003f4423322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330555555500b5b5bb055555550055555507f567220555555500fff1f003f44422322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330ffff1f003b5bbb50ffff1f00ffff1f007f456720ffff1f00088fff700f44242322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333300ccfff700b5555b00ccfff700ccfff700f4256500ccfff70028777770f42442322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333305c777770000000305c7777705c7777704b4b55b05c777770800800004b4b24b22ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333000000000ccccc0000000000000000000bbbbbb300000000000000b33bbbbbb322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333366666660c66666c00066c00333333333333333336c65c6c6333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333366666660c666666c06667c00066666666666666666655666333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333666766605555555006661c5506666666666666666c65c6c6333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443333333366676660ffff1f0006666600066666666666666666655666333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333666676700ccfff7055565550667766776677667766655666333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44333333336666666605c77770565c5650666666666666666633333333333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333366666660c00c00055505550666666666666666633333333333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333336666660000003000000000666666666666666633333333333333333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366666663333333333333333322ccccccccfcccccccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366666663333333333333333322cccccccf44ccfcccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366676663333333333333333322cccccc72427f42ccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366676663333333333333333322ccccccc727c722ccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366666663333333333333333322cccccccc7f4c77ccccccc
+ccccccccccccccccccccccccccccccc4433333333333333333333333333333333333333333333333366666663333333333333333322ccccccc724427cccccccc
+ccccccccccccccccccccccccccccccc4433333333330000333333333333333333333333333333333366676663333333333333333322cccccccc7227ccccccccc
+ccccccccccccccccccccccccccccccc4433333333300510333333333333333333333333333333333366676663333333333333333322ccccccccc77cccccccccc
+ccccccccccccccccccccccccccccccc4433b33b33005550333355555555555555555555555555555556666655555555555555555522ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bbb5bb00555000035ccccccccccccccccccccccccccccccc66666ccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bb5bb5055505c700ccccccccccccccccccccccccccccccc5667665cccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bb5b5bb055c05c1c0cccccccccccccccccccccccccccccccc66766ccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443b5bbb50555555550ccccccccccccccccccccccccccccccc5666665cccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bbb5bbb05c6c6c650cccccccccccccccccccccccccccccccc66666ccccccccccccccccccccccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433433430055555500cccccc666666666666666666666666666676666666666666666666622ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333000000005ccccc6333333333333333333333333366676663335555333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433b33b3333b33b335ccccc6333333333333333333333333366666663356666533333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bbb5bb33bbb5bb35ccccc6333333333333333333333333366666663566666653333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bb5bb533bb5bb535ccccc6333333333333333333333333366676663356666533333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bb5b5bb5bb5b5bb55ccccc6333333333333333333333333366676663335555333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443b5bbb533b5bbb535ccccc6333333333333333333333333366666663335665333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bbb5bbb5bbb5bbb55ccccc6333333333333333333333333366666663335665333333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433433433334334355ccccc6333333333333333333333333366676665355555533333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333333000000055ccccc6333333333333333333333333300000005357667533333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433b33b300ccccc005ccccc633333333333333333333333300ccccc00356666533333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bbb5bb0c66666c00ccccc63333333333333333333333330c66666c0055555553333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443bb5bb50c666666c0ccccc63333333333333333333333330c666666c076767653333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bb5b5bb0555555500ccccc6333333333333333333333333055555550066666653333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443b5bbb507ccf1f770ccccc63333333333333333333333330ffff1f00576767653333333322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc44bbb5bbb07ccfff750ccccc633333333333333333333333300ccfff70033333333355553322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc443343343075cccc770ccccc6333333333333333333333333305c77777033333333375753322ccccccccccccccccccccc
+ccccccccccccccccccccccccccccccc4433333330000000000ccccc6333333333333333333333333300000000033333336665566622ccccccccccccccccccccc
+cccccccccccfccccccccccccccccccc4433b33b3333b33b335ccccc6333333333333333333333333333333333333333336765767622ccccccccccccccccccccc
+ccccccccccf44ccfccccccccccccccc443bbb5bb33bbb5bb35ccccc6333333333333333333333333333333333333333336665566622ccccccccccccccccccccc
+ccccccccc72427f42cccccccccccccc443bb5bb533bb5bb535ccccc6333333333333333333333333333333333333333336765767622ccccccccccccccccccccc
+cccccccccc727c722cccccccccccccc44bb5b5bb5bb5b5bb55ccccc6333333333333333333333333333333333333333336665566622ccccccccccccccccccccc
+ccccccccccc7f4c77cccccccccccccc443b5bbb533b5bbb535ccccc6333333333333333333333333333333333333333336665566622ccccccccccccccccccccc
+cccccccccc724427ccccccccccccccc44bbb5bbb5bbb5bbb55ccccc6333333333333333333333333333333333333333333333333322ccccccccccccccccccccc
+ccccccccccc7227cccccccccccccccc4433433433334334335ccccc6333333333333333333333333333333333333333333333333322ccccccccccccccccccccc
+cccccccccccc77ccccccccccccccccc4433333333333333335ccccc6333333333333333333333333333333333333333333333333322ccccccccccccccccccccc
 
 __gff__
 00000000000300000021212100210303000000000000000000212121060a12090000000000000000002121210303031100000000000000000021212103030303464a5200868a92000000000000000000000000000000000000000000212121210000000000000000000000000505054100000000000000000000000005050505
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0d000000000000000000000000000d2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f0000000000000d0000000000000000000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000d0000002f1f1f1f6f6f6f1f1f6f6f6f1f1f1f2f00000d0000000000000000000d0000000000000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00001a0a0a0a0a0a0a5e0a0a2a00002f1f422d2d1d2d2d2d2d2d2d2d1d1f2f0000001a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a2a000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000291d6f6f6f6f6f7f1f1f2b00002f1f1f1f6f6f6f1f1f6f6f6f1f3f1f2f000000296f2f6f6f6f6f6f6f6f6f2f2f2f6f6f6f6f6f6f2b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000d0000002f1f1f1f1f1f1f1f2f2f2f2f1f1f1f2f00000d0000000000000000000d0000000000000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00001a0a0a0a0a0a0a5e0a0a2a00002f1f1d2d2d1d6f1f2f2f2f2f1f441f2f0000001a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a2a000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000291d6f6f6f6f6f7f1f1f2b00002f1f1f1f6f6f6f1f2f2f2f2f1f3f1f2f000000296f2f6f6f6f6f6f6f6f6f2f2f2f6f6f6f6f6f6f2b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000296f40426f6f6f7f1e1f2b00002f2f2f2f2f2f2f1f2f2f2f2f1f3f1f2f000000292f6f6f6f6f6f6f6f6f6f2f2f2f6f6f1d1d1d6f2b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000296f6f3f6f6f6f7f1f1f2b00002f1f1f1f6f6f6f1f1f6f6f6f1f3f1f2f000000296f402d2d2d2d2d2d2e6f2f2f2f6f6f1d1f1d6f2b00000d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00005d7d7d057d7d7d7e1f1f2b00002f1f402d2d2d2d2d2d2d2d2d2d441f2f000000292f6f6f6f6f6f426f3f6f2f2f2f6f6f1d1d1d6f2b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000296f6f3f6f6f6f6f6f6f2b00002f1f3f1f6f6f6f1f1f6f6f6f1f1f1f2f000000296f2f6f6f6f6f6f6f3f1f2f2f2f6f6f3f6f6f6f2b000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000296f6f3f6f6f6f7f1f1f2b00002f1f1f1f6f6f6f1f1f6f6f6f1d3f1f2f000000296f402d2d2d2d2d2d2e6f2f2f2f6f6f1d1f1d6f2b00000d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00005d7d7d057d7d7d7e1f1f2b00002f1f422d2d2d2d2d2d2d2d2d2d461f2f000000292f6f6f6f6f6f426f3f6f2f2f2f6f6f1d1d1d6f2b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000296f6f3f6f6f6f6f6f6f2b00002f1f3f1d6f6f6f1f1f6f6f6f1f1f1f2f000000296f2f6f6f6f6f6f6f3f1f2f2f2f6f6f3f6f6f6f2b000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000296f6f1d2d2d2d1d2e6f2b00002f1f3f1f2f2f2f2f1f2f2f2f2f2f2f2f00000d393a196f6f1f1f6f6f3f1f2f2f2f6f1f3f1f1b3a3b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0d00292f2f2f2f2f2f1f3f6f2b000d2f1f3f1f6f6f6f1f1f6f6f6f1f1f1f2f0000000000296f6f1f1f6f6f3f6c6d6d6d6d6d0e6d5c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000296f6f6f1f1d3d3d3e6f2b00002f1f1d2d2d2d2d2d2d2d1d2d2d461f2f0000000000296f6f6f6f6f6f3f7f1f1f6f1f1f3f2f2b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000296f2c2d2d1d1f6f6f6f2b00002f1f1f1f6f6f6f6f6f6f6f6f1f1f1f2f0000000000296f6f6f6f6f1f3f7f1f6f6f6f1f3f6f2b0d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0d00292f2f2f2f2f2f1f3f6f2b000d2f1f3f1f2f2f2f2f1f6f6f6f1f1f1f2f0000000000296f6f1f1f6f6f3f6c6d6d6d6d6d0e6d5c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000296f6f6f1f1d3d3d3e6f2b00002f1f401f2f2f2f2f1f6f1d2d2d1d1f2f0000000000296f6f6f6f6f6f3f7f1f1f6f1f1f3f2f2b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000296f2c2d2d1d1f6f6f6f2b00002f1f1f1f2f2f2f2f1f1f1f1f1f1f1f2f0000000000296f6f6f6f6f1f3f7f1f6f6f6f1f3f6f2b0d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000296f3f1f2f2f2f2f2f2f2b00002f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f0000000000296f1e6f6f1f1f3c0f3d3d3d3d3d1e6f2b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000296f3c1d3d3d3d1d6f6f2b000000000000000000000000000000000000000000000d296f1e3d3d3d3d3d0f2e1f1f6f6f1e6f2b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000296f6f6f6f6f6f3f6f6f2b0d002f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f0000000000296f3f1f1f6f6f1f7f3f1f6f6f6f6f6f2b00000d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
