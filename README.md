@@ -7,12 +7,13 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
+* Main Menu
 * APC
 * APC AI
+* Dialogue
 * Save/load functionality
-* 3 Campaign missions
+* 8 Campaign missions
 * Unlockable commanders
-* Better AI so they weigh movement positions based on whether or not they are in attack range of a losing fight
 * more campaign missions
 * multiplayer
 
