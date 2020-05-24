@@ -61,13 +61,13 @@ team_index_to_team_icon = {
 -- ai unit ratios
 -- must add up to 100
 ai_unit_ratio_infantry = 5
-ai_unit_ratio_mech = 15
-ai_unit_ratio_recon = 18
+ai_unit_ratio_mech = 12
+ai_unit_ratio_recon = 21
 ai_unit_ratio_apc = 0
-ai_unit_ratio_artillery = 18
+ai_unit_ratio_artillery = 17
 ai_unit_ratio_tank = 16
-ai_unit_ratio_rocket = 16
-ai_unit_ratio_war_tank = 12
+ai_unit_ratio_rocket = 14
+ai_unit_ratio_war_tank = 14
 
 -- byte constants
 starting_memory = 0x4300
