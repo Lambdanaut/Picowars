@@ -1,6 +1,13 @@
 pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
+-- pico wars
+-- by lambdanaut
+-- https://lambdanaut.itch.io/
+-- https://twitter.com/lambdanaut
+-- thanks to nintendo for making advance wars
+-- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
+
 
 debug = false
 
@@ -37,7 +44,6 @@ ai_index_options = {"vs ai", "vs human"}
 
 
 function _init()
-
   load_assets()
 end
 
@@ -108,7 +114,7 @@ function _draw()
    
     rectfill(0, 0, 128, 128, 0)
     spr(160, 31, 29, 8, 2)
-    print("version 0.2", 42, 40, 9)
+    print("version 0.3", 42, 40, 9)
     for y = 0, 1 do
       for x = 0, 1 do
         spr(168 + last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
@@ -119,12 +125,16 @@ function _draw()
     print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
     print("press ❎ to play", 32, 98, 7)
   elseif game_over then 
+    camera(0, 0)
     local game_over_text = "victory!"
-    if game_over == 2 then game_over_text = "defeat" end
-    rectfill(0, 0, 128, 128, 0)
+    if game_over == 2 then game_over_text = " defeat" end
+    local game_over_text2 = "your army capture their hq"
+    if game_over == 2 then game_over_text2 = "the enemy captured your hq" end
+    rectfill(0, 0, 128, 128, (players_turn - 1)*2)
     print(game_over_text, 48, 58, 9)
     line(46, 64, 79, 64, 9)
-    print("press enter and reset cart", 14, 70, 7)
+    print(game_over_text2, 14, 70, 7)
+    print("press enter and reset cart", 14, 78, 7)
   else
     current_map:draw()
 
@@ -174,7 +184,7 @@ players_music = {}
 players_co_icon = {}
 units = {}
 turn_i = 0
-function end_game(reason)
+function end_game()
   game_over = players_turn
 end
 function end_turn()
@@ -1470,7 +1480,7 @@ function make_structure(struct_type, p, team)
       self.capture_left = 20
       if self.type == 1 then
        
-        end_game(players_turn)
+        end_game()
       end
     else
       sfx(9)
@@ -1898,10 +1908,7 @@ function load_assets()
   current_map = make_war_map({peek_increment(), peek_increment(), peek_increment(), peek_increment()})
   map_bg_color = peek_increment()
 
- 
-  if peek_increment() == 1 then
-    reload(0x2000, 0x2000, 0x1000, 'loader.p8')
-  end
+  peek_increment()
   
 end
 
