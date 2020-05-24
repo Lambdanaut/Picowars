@@ -9,7 +9,7 @@ debug = true
 palette_orange = "orange star★"
 palette_blue = "blue moon●"
 palette_green = "green earth🅾️"
-palette_pink = "pink groove♥"
+palette_pink = "pink quasar░"
 
 team_index_to_palette = {
   palette_orange,
