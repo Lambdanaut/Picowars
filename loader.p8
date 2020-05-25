@@ -10,6 +10,8 @@ __lua__
 
 version = "1.0"
 
+dead_str = 'dead'
+
 -- mobility ids
 mobility_infantry = 0
 mobility_mech = 1
@@ -38,6 +40,7 @@ unit_index_war_tank = 8
 -- sfx
 sfx_option_change = 0
 sfx_splash_screen_start = 1
+sfx_dialogue_char = 2
 
 sfx_infantry_moveout = 14
 sfx_tank_moveout = 15
@@ -91,12 +94,6 @@ ai_unit_ratio_war_tank = 14
 starting_memory = 0x4300
 match_result_memory = 0x5ddd
 
--- globals
-last_checked_time = 0.0
-delta_time = 0.0  -- time since last frame
-memory_i = starting_memory
-campaign_level = 1
-
 -- menu index
 -- 1=splash screen
 -- 2=vs selection
@@ -111,7 +108,17 @@ vs_mode_option_selected = 0
 map_index_selected = 0
 ai_index_selected = 0
 map_index_options = {"eezee island", "arbor island", "lil highland", "long island"}
-ai_index_options = {"vs ai", "vs human"}
+ai_index_options = {"vs ai", "vs human", "ai vs ai"}
+
+-- fadeout variables
+fading = 0
+
+-- globals
+last_checked_time = 0.0
+delta_time = 0.0  -- time since last frame
+memory_i = starting_memory
+campaign_level_index = 1
+dialogue_timer = 0
 
 
 function _init()
@@ -123,26 +130,6 @@ function _init()
   -- setup initial commander data
   make_commanders()
 
-  local game_commanders = {
-    make_sami(),
-    make_alecia(),
-  }
-  local team_humans = {
-    false,
-    false
-  }
-  local team_indexes = {
-    -- 1,
-    -- 2
-  }
-
-  -- write commander, unit, and map data for engine use
-  -- if game_commanders[1].team_index == game_commanders[2].team_index then game_commanders[2].team_index = (game_commanders[2].team_index + 1) % 4 end
-  -- for i=1, 2 do
-  --   write_co(game_commanders[i], team_humans[i], team_indexes[i])
-  -- end
-  -- write_map(make_map4())
-
   -- load save
   write_save()
   read_save()
@@ -153,6 +140,7 @@ function _update()
   local t = time()
   delta_time = t - last_checked_time
   last_checked_time = t
+  dialogue_timer += delta_time
 
   btnp_left = btnp(0)
   btnp_right = btnp(1)
@@ -162,57 +150,14 @@ function _update()
   btnp4 = btnp(4)
   btnp5 = btnp(5)
 
-
-  if menu_index == 1 then
-    -- main menu / splash screen
-
-    if btnp_left then 
-      main_menu_selected -= 1 
-      sfx(0)
-    elseif btnp_right then 
-      main_menu_selected += 1
-      sfx(0)
-    end
-    main_menu_selected = main_menu_selected % #main_menu_options
-
-    if btnp4 then
-      sfx(sfx_splash_screen_start)
-      if main_menu_selected == 0 then
-        -- start campaign
-      elseif main_menu_selected == 1 then
-        -- open vs mode menu
-        menu_index = 2
-      end
-    end
+  if fading ~= 0 then
+    fadeout()
+  elseif menu_index == 1 then
+    update_main_menu()
   elseif menu_index == 2 then
-    if vs_mode_option_selected == 0 then 
-      if btnp_left then 
-        map_index_selected -= 1 
-        sfx(0)
-      elseif btnp_right then 
-        map_index_selected += 1
-        sfx(0)
-      end
-    elseif btnp_left or btnp_right then 
-      ai_index_selected += 1 
-      sfx(0)
-    end
-    if btnp_down or btnp_up then
-      vs_mode_option_selected += 1
-      sfx(0)
-    end
-    if btnp4 or btnp5 then 
-      local players_human = {true}
-      current_map = map_index_mapping[map_index_selected+1]
-      players_human[2] = ai_index_selected == 1
-
-      write_assets(current_map, {make_sami(), make_alecia()}, players_human)
-      start_map()
-    end
-
-    map_index_selected = map_index_selected % 6
-    ai_index_selected = ai_index_selected % 2
-    vs_mode_option_selected = vs_mode_option_selected % 2
+    update_verses_menu()
+  elseif menu_index == 3 then
+    update_campaign()
   end
 
 end
@@ -232,45 +177,146 @@ function _draw()
       local sprite_green_earth = 193
       local sprite_pink_quasar = 209
 
-      if campaign_level < 2 then sprite_orange_star = 224 end
-      if campaign_level < 2 then sprite_green_earth = 224 end
-      if campaign_level < 2 then sprite_pink_quasar = 224 end
+      if campaign_level_index < 2 then sprite_orange_star = 224 end
+      if campaign_level_index < 2 then sprite_green_earth = 224 end
+      if campaign_level_index < 2 then sprite_pink_quasar = 224 end
 
       spr(208, 47, 38)
       spr(sprite_orange_star, 56, 38)
       spr(sprite_green_earth, 65, 38)
       spr(sprite_pink_quasar, 74, 38)
 
-      print("press ❎ to play", 33, 108, 7 - flr(last_checked_time*2 % 2) * 2)
-
     if menu_index == 1 then
-      for x = 0, 1 do
-        spr(last_checked_time*2 % 2, 24 + x*73, 54, 1, 2, x==1)
-      end
-
-      print_outlined(main_menu_options[main_menu_selected+1], 39, 59, 7, 4)
+      draw_main_menu()
 
     elseif menu_index == 2 then
-      -- vs menu
+      draw_verses_menu()
+    end
+  elseif menu_index == 3 then
+    draw_campaign()
+  end
+end
 
-      for y = 0, 1 do
-        for x = 0, 1 do
-          spr(168 + last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
-        end
-      end
-      rectfill(38, 58 + (vs_mode_option_selected) * 19, 86, 64 + (vs_mode_option_selected) * 19, 4)
-      print(map_index_options[map_index_selected+1], 39, 59, 7)
-      print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
+function update_main_menu()
+  -- main menu / splash screen
 
+  if btnp_left then 
+    main_menu_selected -= 1 
+    sfx(0)
+  elseif btnp_right then 
+    main_menu_selected += 1
+    sfx(0)
+  end
+  main_menu_selected = main_menu_selected % #main_menu_options
 
-    elseif menu_index == 3 then
-
+  if btnp4 then
+    sfx(sfx_splash_screen_start)
+    if main_menu_selected == 0 then
+      -- start campaign
+      init_campaign()
+      menu_index = 3
+    elseif main_menu_selected == 1 then
+      -- open vs mode menu
+      menu_index = 2
     end
   end
 end
 
-function run_level()
-  
+function update_verses_menu()
+  if vs_mode_option_selected == 0 then 
+    if btnp_left then 
+      map_index_selected -= 1 
+      sfx(0)
+    elseif btnp_right then 
+      map_index_selected += 1
+      sfx(0)
+    end
+  elseif btnp_left then 
+    ai_index_selected -= 1 
+    sfx(0)
+  elseif btnp_right then
+    ai_index_selected += 1 
+    sfx(0)
+  end
+
+  if btnp_down or btnp_up then
+    vs_mode_option_selected += 1
+    sfx(0)
+  end
+
+  if btnp4 then 
+    -- start vs match
+    sfx(1)
+    fadeout()
+    local players_human = {true}
+    current_map = map_index_mapping[map_index_selected+1]
+    players_human[1] = ai_index_selected < 2
+    players_human[2] = ai_index_selected == 1
+
+    write_assets(current_map, {make_sami(), make_alecia()}, players_human)
+  elseif btnp5 then
+    -- back to main menu
+    sfx(1)
+    menu_index = 1
+  end
+
+
+  map_index_selected = map_index_selected % 6
+  ai_index_selected = ai_index_selected % 3
+  vs_mode_option_selected = vs_mode_option_selected % 2
+end
+
+function init_campaign()
+  if campaign_level_index < 1 then campaign_level_index = 1 end
+  current_level = campaign_levels[campaign_level_index]
+end
+
+function update_campaign()
+end
+
+function draw_main_menu()
+  for x = 0, 1 do
+    spr(last_checked_time*2 % 2, 24 + x*73, 54, 1, 2, x==1)
+  end
+
+  print_outlined(main_menu_options[main_menu_selected+1], 39, 59, 7, 4)
+
+  pal(7,  7 - flr(last_checked_time*2 % 2) * 2)
+  print("press    to play", 33, 108, 7)
+  spr(240, 57, 106)
+  pal()
+end
+
+function draw_verses_menu()
+  for y = 0, 1 do
+    for x = 0, 1 do
+      spr(last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
+    end
+  end
+  rectfill(38, 58 + (vs_mode_option_selected) * 19, 86, 64 + (vs_mode_option_selected) * 19, 4)
+  print(map_index_options[map_index_selected+1], 39, 59, 7)
+  print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
+end
+
+function draw_campaign()
+  cls()
+
+  if not active_dialogue_coroutine then
+    active_dialogue_coroutine = cocreate(dialogue_coroutine)
+
+  elseif costatus(active_dialogue_coroutine) == dead_str then
+    -- dialogue over. run campaign mission
+
+    -- write the map, commander and unit data to memory
+    local current_map = map_index_mapping[current_level.map_index]
+    write_assets(current_map, {current_level.co_p1, current_level.co_p2}, {true, false})
+
+    fadeout()
+
+  elseif active_dialogue_coroutine then
+    coresume(active_dialogue_coroutine)
+  end
+
 end
 
 function start_map()
@@ -278,20 +324,102 @@ function start_map()
   load("picowars.p8")
 end
 
-function print_outlined(str, x, y, col, outline_col)
-  rectfill(x - 1, y - 1, x + #str * 4 - 1, y + 5, outline_col)
-  print(str, x, y, col)
+-- coroutines
+function dialogue_coroutine()
+  current_dialogue_index = 0
+
+  while current_dialogue_index < #current_level.dialogue + 1 do
+    current_dialogue_index += 1
+    current_dialogue = current_level.dialogue[current_dialogue_index]
+
+    dialogue_str_i = 0
+
+    while dialogue_str_i < #current_dialogue[2] do
+      dialogue_str_i += 1
+
+      local next_char = sub(current_dialogue[2], dialogue_str_i, dialogue_str_i)
+      if next_char ~= " " then
+        sfx(sfx_dialogue_char)
+      end
+
+      dialogue_timer = 0
+      if next_char == "." then
+        dialogue_timer = -0.35
+      elseif next_char == "," then
+        dialogue_timer = -0.15
+      end
+
+      while dialogue_timer < 0.0333 do
+        draw_dialogue(current_dialogue[2], dialogue_str_i)
+
+        if btnp4 and dialogue_str_i > 1 then
+          dialogue_str_i = #current_dialogue[2]
+          yield()
+          break
+        end
+
+        yield()
+
+      end
+
+    end
+
+    while not btnp4 do
+      draw_dialogue(current_dialogue[2])
+      print("🅾️", 120, 122, 0)
+      yield()
+    end
+
+  end
 end
 
--- campaign levels
-function level_1()
-  local l = {}
+function draw_dialogue(string, length)
+  set_palette(current_dialogue[1].team_index)
+  rectfill(0, 96, 128, 128, 9)  -- bground
+  line(0, 96, 128, 96, 8)  -- bground border
+  pal()
+  rectfill(1, 98, 19, 115, 0)  -- portrait border
+  local sprite_offset = 0
+  if current_dialogue[3] then sprite_offset = -64 end
+  spr(current_dialogue[1].sprite + sprite_offset, 2, 99, 2, 2)  -- portrait
 
-  l.dialogue = {
-    {p_snake, "ah, blue moon's capital. ripe for the picking. i couldn't have imagined it would be this easy."},
-    {p_snake, "..."},
-    {p_snake, "maybe too easy."},
-  }
+  local strings = split_str(string, length)
+  local str_i = 102
+  for str in all(strings) do
+    print(str, 23, str_i, 0)
+    str_i += 8
+  end
+end
+
+function split_str(str, length)
+  -- splits a string into parts for dialogue
+
+  if not length then length = 32767 end
+  local max_on_line = 18
+  local current_str = str
+  local built_str = ""
+  local strings = {}
+
+  local i = 1
+  local i_length = 1
+  while i <= #current_str and i_length <= length do
+    local next_char = sub(current_str, i, i)
+    built_str = built_str .. next_char
+    if i > max_on_line then
+      if next_char == " " then
+        add(strings, sub(current_str, 1, i) )
+        current_str = sub(current_str, i + 1)
+        built_str = ""
+        i = 0
+      end
+    end
+    i += 1
+    i_length += 1
+  end
+
+  add(strings, built_str)
+
+  return strings
 
 end
 
@@ -351,212 +479,6 @@ end
 -- must appear after all make_map statements
 map_index_mapping = {make_map1(), make_map2(), make_map3(), make_map4()}
 
--- commanders
-function make_commanders()
-  commanders = {
-    make_dan(),
-    make_sami(),
-    make_hachi(),
-    make_bill(),
-    make_guster(),
-    make_slydy(),
-  }
-end
-
-function make_dan()
-  local co = {}
-
-  co.name = "dan"
-  co.sprite = p_dan
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = true
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- dan's units get 1 more healing from structures
-  for unit in all(co.units) do
-    unit.struct_heal_bonus = 1
-  end
-
-  return co
-end
-
-function make_sami()
-  local co = {}
-
-  co.name = "sami"
-  co.sprite = p_sami
-  co.team_index = 1  -- orange star
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- sami's infantry and mechs travel further
-  co.units[1].travel += 1
-  co.units[2].travel += 1
-
-  -- sami's infantry and mechs have a +5 to their capture rate
-  co.units[1].capture_bonus += 5
-  co.units[2].capture_bonus += 5
-
-  -- sami's infantry and mechs have 30% more attack
-  for i in all({unit_index_infantry, unit_index_mech}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
-
-  -- sami's non-infantry units have 10% less attack
-  for i=3,#co.units do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
-
-  return co
-end
-
-function make_hachi()
-  local co = {}
-
-  co.name = "hachi"
-  co.sprite = p_hachi
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- hachi's non-infantry and non-mech units cost 15% less
-  for i=3, #co.units do
-    co.units[i].cost = flr(co.units[i].cost * 0.85)
-  end
-
-  return co
-end
-
-function make_bill()
-  local co = {}
-
-  co.name = "bill"
-  co.sprite = p_bill
-  co.team_index = 2  -- blue moon
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- bill's non-infantry units have 10% more luck
-  for i=1,#co.units do
-    co.units[i].luck_max = 2
-  end
-
-  return co
-end
-
-function make_alecia()
-  local co = {}
-
-  co.name = "alecia"
-  co.sprite = p_alecia
-  co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  return co
-end
-
-function make_conrad()
-  local co = {}
-
-  co.name = "conrad"
-  co.sprite = p_conrad
-  co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  for unit in all(co.units) do
-    -- conrads's units are only healed by 1 by structures
-    unit.struct_heal_bonus = -1
-
-    -- all of conrads units have 10% more firepower
-    for i=1, #unit.damage_chart do
-      unit.damage_chart[i] *= 1.1
-    end
-  end
-
-  return co
-end
-
-function make_guster()
-  local co = {}
-
-  co.name = "guster"
-  co.sprite = p_guster
-  co.team_index = 3  -- green earth
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- guster's ranged units have +1 range
-  co.units[4].range_max += 1
-  co.units[6].range_max += 1
-
-  -- guster's ranged units have 30% more attack
-  for i in all({unit_index_artillery, unit_index_rocket}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
-
-  -- guster's non-ranged, non-infantry units have 10% less attack
-  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
-
-  -- guster's ai prioritizes ranged units
-  co.units[unit_index_infantry].ai_unit_ratio = 10
-  co.units[unit_index_mech].ai_unit_ratio = 5
-  co.units[unit_index_recon].ai_unit_ratio = 5
-  co.units[unit_index_apc].ai_unit_ratio = 6
-  co.units[unit_index_artillery].ai_unit_ratio = 32
-  co.units[unit_index_tank].ai_unit_ratio = 5
-  co.units[unit_index_rocket].ai_unit_ratio = 32
-  co.units[unit_index_war_tank].ai_unit_ratio = 5
-
-  return co
-end
-
-function make_slydy()
-  local co = {}
-
-  co.name = "slydy"
-  co.sprite = p_slydy
-  co.team_index = 4  -- pink quasar
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  return co
-end
 
 -- unitdata
 function make_units()
@@ -842,10 +764,250 @@ function make_war_tank()
   return unit
 end
 
+-- commanders
+function make_commanders()
+  commanders = {
+    make_dan(),
+    make_sami(),
+    make_hachi(),
+    make_bill(),
+    make_guster(),
+    make_slydy(),
+  }
+end
+
+function make_dan()
+  local co = {}
+
+  co.name = "dan"
+  co.sprite = p_dan
+  co.team_index = 1
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = true
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- dan's units get 1 more healing from structures
+  for unit in all(co.units) do
+    unit.struct_heal_bonus = 1
+  end
+
+  return co
+end
+co_dan = make_dan()
+
+function make_sami()
+  local co = {}
+
+  co.name = "sami"
+  co.sprite = p_sami
+  co.team_index = 1  -- orange star
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- sami's infantry and mechs travel further
+  co.units[1].travel += 1
+  co.units[2].travel += 1
+
+  -- sami's infantry and mechs have a +5 to their capture rate
+  co.units[1].capture_bonus += 5
+  co.units[2].capture_bonus += 5
+
+  -- sami's infantry and mechs have 30% more attack
+  for i in all({unit_index_infantry, unit_index_mech}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- sami's non-infantry units have 10% less attack
+  for i=3,#co.units do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 0.9
+    end
+  end
+
+  return co
+end
+co_sami = make_sami()
+
+function make_hachi()
+  local co = {}
+
+  co.name = "hachi"
+  co.sprite = p_hachi
+  co.team_index = 1
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- hachi's non-infantry and non-mech units cost 15% less
+  for i=3, #co.units do
+    co.units[i].cost = flr(co.units[i].cost * 0.85)
+  end
+
+  return co
+end
+co_hachi = make_hachi()
+
+function make_bill()
+  local co = {}
+
+  co.name = "bill"
+  co.sprite = p_bill
+  co.team_index = 2  -- blue moon
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- bill's non-infantry units have 10% more luck
+  for i=1,#co.units do
+    co.units[i].luck_max = 2
+  end
+
+  return co
+end
+co_bill = make_bill()
+
+function make_alecia()
+  local co = {}
+
+  co.name = "alecia"
+  co.sprite = p_alecia
+  co.team_index = 2
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  return co
+end
+co_alecia = make_alecia()
+
+function make_conrad()
+  local co = {}
+
+  co.name = "conrad"
+  co.sprite = p_conrad
+  co.team_index = 2
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  for unit in all(co.units) do
+    -- conrads's units are only healed by 1 by structures
+    unit.struct_heal_bonus = -1
+
+    -- all of conrads units have 10% more firepower
+    for i=1, #unit.damage_chart do
+      unit.damage_chart[i] *= 1.1
+    end
+  end
+
+  return co
+end
+co_conrad = make_conrad()
+
+function make_guster()
+  local co = {}
+
+  co.name = "guster"
+  co.sprite = p_guster
+  co.team_index = 3  -- green earth
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- guster's ranged units have +1 range
+  co.units[4].range_max += 1
+  co.units[6].range_max += 1
+
+  -- guster's ranged units have 30% more attack
+  for i in all({unit_index_artillery, unit_index_rocket}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- guster's non-ranged, non-infantry units have 10% less attack
+  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 0.9
+    end
+  end
+
+  -- guster's ai prioritizes ranged units
+  co.units[unit_index_infantry].ai_unit_ratio = 10
+  co.units[unit_index_mech].ai_unit_ratio = 5
+  co.units[unit_index_recon].ai_unit_ratio = 5
+  co.units[unit_index_apc].ai_unit_ratio = 6
+  co.units[unit_index_artillery].ai_unit_ratio = 32
+  co.units[unit_index_tank].ai_unit_ratio = 5
+  co.units[unit_index_rocket].ai_unit_ratio = 32
+  co.units[unit_index_war_tank].ai_unit_ratio = 5
+
+  return co
+end
+co_guster = make_guster()
+
+function make_slydy()
+  local co = {}
+
+  co.name = "slydy"
+  co.sprite = p_slydy
+  co.team_index = 4  -- pink quasar
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  return co
+end
+co_slydy = make_slydy()
+
+
+-- campaign levels
+function level_1()
+  local l = {}
+
+  l.map_index = 1
+  l.co_p1 = make_sami()
+  l.co_p2 = make_bill()
+
+  l.dialogue = {
+    {co_bill, "ah orange star. the capital. ripe, for picking. amazing."},
+    {co_bill, "...", true},
+    {co_bill, "maybe too easy.", true},
+  }
+
+  return l
+end
+
+-- index of all campaign levels 
+campaign_levels = {level_1()}
+
+
+
+-- memory read/write functions
+
 function write_string(string, length)
   -- writes a string to memory
   for i = 1, length do
-    local c = sub(string, i,i)
+    local c = sub(string, i, i)
     local charcode_val = ord(c)
     poke_increment(charcode_val)
   end
@@ -955,7 +1117,7 @@ function write_save()
   memory_i = 0x5e00
 
   -- write campaign score and progress to disk
-  campaign_level = poke_increment(campaign_level)
+  poke_increment(campaign_level_index)
 
   -- write available commanders to disk
   for co in all(commanders) do
@@ -972,7 +1134,7 @@ function read_save()
   memory_i = 0x5e00
 
   -- read campaign score and progress to disk
-  campaign_level = peek_increment()
+  campaign_level_index = peek_increment()
 
   -- read available commanders to disk
   for co in all(commanders) do
@@ -1001,6 +1163,47 @@ function read_match_result()
 end
 
 
+function set_palette(palette)
+  if palette == 2 then
+    pal(9, 6)
+    pal(8, 12)
+    pal(2, 5)  
+  elseif palette == 3 then
+    pal(9, 11)
+    pal(8, 3)
+    pal(2, 10)  
+  elseif palette == 4 then
+    pal(9, 14)
+    pal(8, 2)
+    pal(2, 10)
+  end
+end
+
+function print_outlined(str, x, y, col, outline_col)
+  rectfill(x - 1, y - 1, x + #str * 4 - 1, y + 5, outline_col)
+  print(str, x, y, col)
+end
+
+
+function fadeout()
+  -- by dw817 
+  -- https://www.lexaloffle.com/bbs/?tid=36243
+  local fade,c,p={[0]=0,17,18,19,20,16,22,6,24,25,9,27,28,29,29,31,0,0,16,17,16,16,5,0,2,4,0,3,1,18,2,4}
+  fading+=1
+  if fading%5==1 then
+    for i=0,15 do
+      c=peek(24336+i)
+      if (c>=128) c-=112
+      p=fade[c]
+      if (p>=16) p+=112
+      pal(i,p,1)
+    end
+    if fading==7*5+1 then
+      -- start the map when fading is over
+      start_map()
+    end
+  end
+end
 
 
 __gfx__
@@ -1026,7 +1229,7 @@ __gfx__
 007dddddddddd7000000000000000000000000000000000007dddd111dddd700000000000000004400000000220000006666667766776677667666633f444223
 07dddddddddddd777777777777777777777777777777777777ddd10001ddd700000000000000004400000000220000006666666666666666666766633f442423
 071111dddddddd822282228822882288c9c9c999c999cc99cddd1000007ddd10000000000000004400000000220000006667666666666666666666633f424423
-000000dddddddd828288288288828828c9c9c9c9c9c9c9cccdd100000007dd7000000000000000440000000022000000666766666666666666676663b4b4b24b
+000000dddddddd828288288288828828c9c9c9c9c9c9c9cccdd100000007dd7000000000000000440000000022000000666766666666666666676663b4b4b22b
 000000dddddddd822288288288828828c9c9c999c99cc999cdd100000007dd10000000000000004440000000220000006666666333333333666766633bbbbbb3
 00000ddddddddd828888288288828828c999c9c9c9c9ccc9cdd100000007dd100000000000000044555555552200000066666663333333336666666366666663
 00000ddddddddd828882228822882288c999c9c9c9c9c99ccddd1000007ddd100000000000000044222222222200000066666666666666666666666366666663
@@ -1068,22 +1271,22 @@ __gfx__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006ccccccccccccccccccccc635ccccc63
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000036ccccccccccccccccccc6335ccccc63
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003366666666666666666663335ccccc63
-000000000000000000005000000500000000000000000000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
-00000000000000000005750000575000000000000000000000002333333333330002277ffffff200000000f88fff22025570000000000070011c111111111111
-0000000000000000000565555566d5000000000000000000000233333333333300277fffffffff2000fffff88888f222500707077700700011c1c11111111111
-0000000000000000000566666666d50000000000000000000006333333333333027ffffffffffff200ff8888808882220000000000000000111c111111111444
-0000000000000000005655565556d5000000000000000000002666fff333366302222fff2222fff200f888880a0888220002fffffff200001111111111449494
-0000000000000000005666666666d5000000000000000000002f666ffff66663029492f294942ff20f888888000888220022ffffff22f0001111111fffff2949
-000000000000000000ee6565656ee500000000000000000002fff66fff66663302222fff22224ff20f8800088884882202622f22f2262f08411112ffff22f442
-000000000000000000ee665656949490000000000000000002f22fffff66ff6302270fff270ff2f20f880a08888488220274288f22742880442672fff2742442
-00000000000000000005566666494940000000000000000002f702f2f22ffff6022072ff2072fff200f200044448882208898f2828898ff04f26492f26492422
-00000000000000000555556655a5a5a000000000000000002ff22f2ff072f2f6021c212f1c21fff202f22844888888f28f282f2f8228fff04ff222fff222f422
-00000000000000005666666566ada5a000000000000000002fffff2ff222f2ff02fc1f2ffc1ff8f200228888888ffff28ff8ff2f8ff8ffff4ffffffffffff424
-000000000000000056d555656da5a5a000000000000000002ffffffffffff2ff02fcff2ffcfe8f20202288888ff22002588fff22f88fffff4ffffff2fffff424
-000000000000000005500567557dd500000000000000000002fffffffffffff302f7fffff7e8e2000222f888ff2222025ffffffffffffff54ffffffffffff424
-000000000000000000000567777dd5000000000000000000002ffff2222fff6302fcf220fc8f2200022220000002222255ffffffffffff5540fffffffffff400
-000000000000000000000567777dd500000000000000000000022ffffffff32300ffffffffff2200220222222222222255ffff222f2ff255400fff2222fff400
-000000000000000000000567777dd5000000000000000000000002222222230300222222222222000000000000022222555fffffffff225540000ffffff00400
+000000000000000000000000000000000000500000050000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
+00000000000000000000000000000000000575000057500000002333333333330002277ffffff200000000f88fff22025570000000000070011c111111111111
+00000000000000000000000000000000000565555566d500000233333333333300277fffffffff2000fffff88888f222500707077700700011c1c11111111111
+00000000000000000000000000000000000566666666d5000006333333333333027ffffffffffff200ff8888808882220000000000000000111c111111111444
+00000000000000000000000000000000005655565556d500002666fff333366302222fff2222fff200f888880a0888220002fffffff200001111111111449494
+00000000000000000000000000000000005666666666d500002f666ffff66663029492f294942ff20f888888000888220022ffffff22f0001111111fffff2949
+0000000000000000000000000000000000ee6565656ee50002fff66fff66663302222fff22224ff20f8800088884882202622f22f2262f08411112ffff22f442
+0000000000000000000000000000000000ee66565694949002f22fffff66ff6302270fff270ff2f20f880a08888488220274288f22742880442672fff2742442
+00000000000000000000000000000000000556666649494002f702f2f22ffff6022072ff2072fff200f200044448882208898f2828898ff04f26492f26492422
+000000000000000000000000000000000555556655a5a5a02ff22f2ff072f2f6021c212f1c21fff202f22844888888f28f282f2f8228fff04ff222fff222f422
+000000000000000000000000000000005666666566ada5a02fffff2ff222f2ff02fc1f2ffc1ff8f200228888888ffff28ff8ff2f8ff8ffff4ffffffffffff424
+0000000000000000000000000000000056d555656da5a5a02ffffffffffff2ff02fcff2ffcfe8f20202288888ff22002588fff22f88fffff4ffffff2fffff424
+0000000000000000000000000000000005500567557dd50002fffffffffffff302f7fffff7e8e2000222f888ff2222025ffffffffffffff54ffffffffffff424
+0000000000000000000000000000000000000567777dd500002ffff2222fff6302fcf220fc8f2200022220000002222255ffffffffffff5540fffffffffff400
+0000000000000000000000000000000000000567777dd50000022ffffffff32300ffffffffff2200220222222222222255ffff222f2ff255400fff2222fff400
+0000000000000000000000000000000000000567777dd500000002222222230300222222222222000000000000022222555fffffffff225540000ffffff00400
 00000000000000000000000000000000000dddddddd0d0d0044004444440000000eeeeeeeeeeeee0000333333333333300111111111111000088888888888000
 000000000000000000000000000000000ddddddddddddd0004444444444444000eeee7eeeeeeeeee033333333333337301111111111111100288888888888880
 00000000000000000000000000000000dd7ddddddddd7ddd4444444444444440ee77eeeeeee222ee073333333333373001111111111111112888888888828878
@@ -1100,40 +1303,40 @@ __gfx__
 000000000000000000000000000000000002fffffffff200000ffffffffff42400ee20ffffff002e002fffff22ffff2000002fffffffff00002ffffffffff222
 0000000000000000000000000000000000002fff222ff000004fff2222f44240000e2000099fffa000222ffffffff200000222ff7777f0000002ffff22ff2222
 00000000000000000000000000000000000002ffffff20000004ffffffff240000002aafffffffaf02222222222220000022222ffffff200000002ffff202020
-888888803333333000005000000500000000000000000000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
-899999803bbbbb300005750000575000000000000000000000002333333333330002277ffffff200000000faafff22025570000000000070011c111111111111
-899899803b333b30000565555566d5000000000000000000000233333333333300277fffffffff2000fffffaaaaaf222500707077700700011c1c11111111111
-898989803b333b30000566666666d50000000000000000000006333333333333027ffffffffffff200ffaaaaa0aaa2220000000000000000111c111111111444
-899899803b343b30005676666676d5000000000000000000002666fff333366302222fff2222fff200faaaaa080aaa22000fffffffff00001111111111449494
-899999803bb4bb30005606666606d5000000000000000000002f666ffff66663029492f294942ff20faaaaaa000aaa220022ffffff22f0001111111fffff4949
-8888888033333330005665656566d500000000000000000002fff66fff66663302222fff22224ff20faa000aaaa4aa2202662f22f2662f08411112fff222f442
-00000000000000000056665656949490000000000000000002f00fffff66ff630226cfff2c66f2f20faa080aaaa4aa220274688f267428804426742f26742442
-11111110222222200005566666494940000000000000000002fff0f2f00ffff6022712ff2172fff200f20004444aaa2208898f2828898ff04f2649fff6492422
-1dcdcd102aaeaa200555556655a5a5a000000000000000002fffff2ffff0fff602f22f2ff22ffff202f22a44aaaaaaf28f282f2f8228fff04ff222fff222f422
-1cdddc102aeeea205666666566ada5a000000000000000002fffff2fffffffff02ffff2ffffff8f20022aaaaaaaffff28ff8ff2f8ff8ffff4ffffffffffff424
-1ddddd102eaeae2056d555656da5a5a000000000000000002fffffffffffffff02ffff2fffff8f202022aaaaaff22002588fff22f88fffff4ffffff2fffff424
-1cdddc102aaeaa2005500567557dd500000000000000000002fff22222f2fff302fffffffff8f2000222faaaff2222025ffffffffffffff54ffffffffffff424
-1dcdcd102aeaea2000000567777dd5000000000000000000002fffffffffff6302fff220ff8f2200022220000002222255ffffffffffff5540ffffffff2ff400
-111111102222222000000567777dd500000000000000000000022ffffffff32300ffffffffff2200220222222222222255ffff222ffff255400fff2222fff400
-000000000000000000000567777dd5000000000000000000000002222222230300222222222222000000000000022222555fffffffff225540000ffffff00400
-111111100000000000000567777dd500000dddddddd0d0d0044004444440000000eeeeeeeeeeeee0000333333333333300111111111111000088888888888000
-107770100000000000000567777dd5000ddddddddddddd0004444444444444000eeee7eeeeeeeeee033333333333337301111111111111100288888888888880
-170007100000000000000567777dd500dd7ddddddddd7ddd4444444444444440ee77eeeeeee222ee073333333333373001111111111111112888888888828878
-100770100000000000000567777dd5000dd77ddd7dddddd04944444444444494e77e22f2eeefff2e337333333333333011111155555555518788881118882788
-100700100000000000000567777dd500ddddd1d1d1dd1d1d4494444444444444e7eefff2eeeffffe3333733333733333111555ccccccccc58878113331888288
-100000100000000000000567777dd500ddd1d111111d11d10444949444494444eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
-111711100000000000000567777dd500ddd111f11f11f11d44444444f4f44442e7ee00ff2ee000feb3f2222fbb322f2015ccf222ffff222f8813222ffff28882
-000000000000000000000567777dd500dd110000ff0000114042224ff222f424ee2f070f2ef070fef2ff2222ffb222205c2f27772ff2777282226722ff262888
-000000000000000000000567777dd500ff1f222ffff22f110042784ff7872f42ee2f070f2ef000feff2226422222462012f267172ff271728227707fff707288
-000000000000000000000567777dd500ff1f27d2ff2d7210000289fff8972f44ee2f000fffff0f2effff27a2fff2a7202fff26772ff267722ff20c7fff0c6228
-000000000000000000000567777dd500ffff2717ff217200044f22ffff22ff42ee2ff0ffffff0f2e2fff2222fff2222012fff212ffff222fffff222fff222ff8
-000000000000000000000567777dd50011fff222fff22f00004fff2fffffff420e2fff222222f2e02ffffffff22fff20002fffffffff2ff02ffffffff2fffff2
-000000000000000000000567777dd500011ffffff22fff00044fff22ffffff420ee2ffeeeeeff2e002ff2fffffffff200002ffffff22fff022ffffffffffff22
-000000000000000000000567777dd5000002fffffffff200000ffffffffff42400ee20ffffff002e002ffff2222fff2000002fffffffff00002ffffffffff222
-000000000000000000000567777dd50000002fff222ff000004fff2222f44240000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
-000000000000000000000567777dd500000002ffffff20000004ffffffff240000002aafffffffaf02222222222220000022222ffffff200000002ffff202020
+888888803333333000000000000000000000500000050000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
+899999803bbbbb300000000000000000000575000057500000002333333333330002277ffffff200000000faafff22025570000000000070011c111111111111
+899899803b333b300000000000000000000565555566d500000233333333333300277fffffffff2000fffffaaaaaf222500707077700700011c1c11111111111
+898989803b333b300000000000000000000566666666d5000006333333333333027ffffffffffff200ffaaaaa0aaa2220000000000000000111c111111111444
+899899803b343b300000000000000000005676666676d500002666fff333366302222fff2222fff200faaaaa080aaa22000fffffffff00001111111111449494
+899999803bb4bb300000000000000000005606666606d500002f666ffff66663029492f294942ff20faaaaaa000aaa220022ffffff22f0001111111fffff4949
+88888880333333300000000000000000005665656566d50002fff66fff66663302222fff22224ff20faa000aaaa4aa2202662f22f2662f08411112fff222f442
+00000000000000000000000000000000005666565694949002f00fffff66ff630226cfff2c66f2f20faa080aaaa4aa220274688f267428804426742f26742442
+11111110222222200000000000000000000556666649494002fff0f2f00ffff6022712ff2172fff200f20004444aaa2208898f2828898ff04f2649fff6492422
+1dcdcd102aaeaa2000000000000000000555556655a5a5a02fffff2ffff0fff602f22f2ff22ffff202f22a44aaaaaaf28f282f2f8228fff04ff222fff222f422
+1cdddc102aeeea2000000000000000005666666566ada5a02fffff2fffffffff02ffff2ffffff8f20022aaaaaaaffff28ff8ff2f8ff8ffff4ffffffffffff424
+1ddddd102eaeae20000000000000000056d555656da5a5a02fffffffffffffff02ffff2fffff8f202022aaaaaff22002588fff22f88fffff4ffffff2fffff424
+1cdddc102aaeaa20000000000000000005500567557dd50002fff22222f2fff302fffffffff8f2000222faaaff2222025ffffffffffffff54ffffffffffff424
+1dcdcd102aeaea20000000000000000000000567777dd500002fffffffffff6302fff220ff8f2200022220000002222255ffffffffffff5540ffffffff2ff400
+1111111022222220000000000000000000000567777dd50000022ffffffff32300ffffffffff2200220222222222222255ffff222ffff255400fff2222fff400
+0000000000000000000000000000000000000567777dd500000002222222230300222222222222000000000000022222555fffffffff225540000ffffff00400
+11111110777777770000000000000000000dddddddd0d0d0044004444440000000eeeeeeeeeeeee0000333333333333300111111111111000088888888888000
+107770107777777700000000000000000ddddddddddddd0004444444444444000eeee7eeeeeeeeee033333333333337301111111111111100288888888888880
+17000710000077700000000000000000dd7ddddddddd7ddd4444444444444440ee77eeeeeee222ee073333333333373001111111111111112888888888828878
+100770100007770000000000000000000dd77ddd7dddddd04944444444444494e77e22f2eeefff2e337333333333333011111155555555518788881118882788
+10070010007770000000000000000000ddddd1d1d1dd1d1d4494444444444444e7eefff2eeeffffe3333733333733333111555ccccccccc58878113331888288
+10000010077700000000000000000000ddd1d111111d11d10444949444494444eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
+11171110777777770000000000000000ddd111f11f11f11d44444444f4f44442e7ee00ff2ee000feb3f2222fbb322f2015ccf222ffff222f8813222ffff28882
+00000000777777770000000000000000dd110000ff0000114042224ff222f424ee2f070f2ef070fef2ff2222ffb222205c2f27772ff2777282226722ff262888
+77777777000000000000000000000000ff1f222ffff22f110042784ff7872f42ee2f070f2ef000feff2226422222462012f267172ff271728227707fff707288
+77777777077777700000000000000000ff1f27d2ff2d7210000289fff8972f44ee2f000fffff0f2effff27a2fff2a7202fff26772ff267722ff20c7fff0c6228
+00007770000007700000000000000000ffff2717ff217200044f22ffff22ff42ee2ff0ffffff0f2e2fff2222fff2222012fff212ffff222fffff222fff222ff8
+0007770000007700000000000000000011fff222fff22f00004fff2fffffff420e2fff222222f2e02ffffffff22fff20002fffffffff2ff02ffffffff2fffff2
+00777000000770000000000000000000011ffffff22fff00044fff22ffffff420ee2ffeeeeeff2e002ff2fffffffff200002ffffff22fff022ffffffffffff22
+077700000077000000000000000000000002fffffffff200000ffffffffff42400ee20ffffff002e002ffff2222fff2000002fffffffff00002ffffffffff222
+7777777707777770000000000000000000002fff222ff000004fff2222f44240000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
+77777777000000000000000000000000000002ffffff20000004ffffffff240000002aafffffffaf02222222222220000022222ffffff200000002ffff202020
 __gff__
-00000000000000000021212100210303000000000000000000212121060a12090000000000000000002121210303031100000000000000000021212103030303464a5200860000000000000000000000000000000000000000002121000000210000002100000000000005050000000500000005000000000000050500000005
+00000000000000000021212100210303000000000000000000212121060a12090000000000000000002121210303031100000000000000001121212103030303464a5200860000000000000000000000000000000000000000002121000000210000002100000000000005050000000500000005000000000000050500000005
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 6f6f6f6f6f6f6f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1153,3 +1356,4 @@ __map__
 __sfx__
 0002000013550215502d5503a5503f5503f5503d5503750032500335002e500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
 000300002865025650216401e6401664011640096300063000630006300003020600266001e600006001260009600066000060000600006000060000600006000060000600006000060000600006000060000600
+000100001905032050240500d05003050070500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

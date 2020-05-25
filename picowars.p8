@@ -21,7 +21,7 @@ team_index_to_palette = {
 team_icon = {}
 
 -- saves a couple tokens
-local dead_str = 'dead'
+dead_str = 'dead'
 
 -- globals
 last_checked_time = 0.0
@@ -575,28 +575,6 @@ function get_selection(p, include_resting)
   return {2, tile}
 end
 
-function get_tile_info(tile)
-  -- returns the {tile name, its defense, its structure type(if applicable), and its team(if applicable)}
-  if fget(tile, 1) then
-    local team
-    if fget(tile, 6) then team = players[1] elseif fget(tile, 7) then team = players[2] end
-    if fget(tile, 2) then return {"hq★★★★", 0.25, 1, team}
-    elseif fget(tile, 3) then return {"city★★★", 0.4, 2, team}
-    elseif fget(tile, 4) then return {"base★★★", 0.4, 3, team}
-    end
-  end
-  if fget(tile, 0) then
-    if fget(tile, 1) then return {"road", 1.0}
-    elseif fget(tile, 6) then return {"plain★", 0.8}
-    elseif fget(tile, 3) then return {"wood★★", 0.6}
-    elseif fget(tile, 4) then return {"mntn★★★★", 0.25}
-    elseif fget(tile, 2) then return {"river", 1.0}
-    elseif fget(tile, 5) then return {"cliff", 1.0}
-    end
-  end
-  return {"unmovable", 0} -- no info
-end
-
 function point_closest_to_p(points, p)
   -- returns the point in points closest to p that doesn't have a unit in it
   local closest = points[1]
@@ -611,7 +589,7 @@ function point_closest_to_p(points, p)
   return closest
 end
 
-attack_coroutine = function()
+function attack_coroutine()
   -- coroutine action that plays out an attack
   currently_attacking = true
 
@@ -663,7 +641,7 @@ attack_coroutine = function()
   currently_attacking = false
 end
 
-end_turn_coroutine = function()
+function end_turn_coroutine()
   end_turn_timer = 0
 
   -- play turn ending sfx and stop music
@@ -2108,6 +2086,9 @@ function prioqueue:pop()
 
   return {returnval, returnpriority}
 end
+
+
+#include lib
 
 
 __gfx__
