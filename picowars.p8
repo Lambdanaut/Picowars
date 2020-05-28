@@ -404,6 +404,12 @@ function ai_coroutine()
     end
   end
 
+  if not debug then
+    for i=1,25 do
+      yield()
+    end
+  end
+
   end_turn()
 
 end
