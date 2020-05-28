@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
-debug = true
+-- debug = true
 
 -- palettes
 
@@ -2088,7 +2088,7 @@ function prioqueue:pop()
 end
 
 
-#include lib
+#include lib.p8
 
 
 __gfx__
