@@ -399,6 +399,7 @@ function ai_coroutine()
 
       if to_build then
         struct:build(to_build)
+        selector_p = copy_v(struct.p)
       end
 
     end
