@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
--- debug = true
+debug = true
 
 -- palettes
 
@@ -607,7 +607,7 @@ function attack_coroutine()
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
   attack_coroutine_u2.hp = max(0, attack_coroutine_u2.hp - damage_done)
   sfx(attack_coroutine_u1.combat_sfx)
-  while attack_timer < 1.25 and not debug do
+  while attack_timer < 1.4 and not debug do
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
     yield()
   end
@@ -618,7 +618,7 @@ function attack_coroutine()
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
     attack_coroutine_u1.hp = max(0, attack_coroutine_u1.hp - damage_done)
     sfx(attack_coroutine_u2.combat_sfx)
-    while attack_timer < 1.25 and not debug do
+    while attack_timer < 1.4 and not debug do
       print("-" .. damage_done, attack_coroutine_u1.p[1], attack_coroutine_u1.p[2] - 4 - attack_timer * 8, 8)
       yield()
     end
