@@ -86,17 +86,12 @@ function _update()
       selector_init()
       players_turn_team = players[players_turn]
     end
-  elseif game_over then
-
   else
     selector_update()
     cam:update()
 
     for unit in all(units) do
       unit:update()
-    end
-    for struct in all(structures) do
-      struct:update()
     end
   end
 end
@@ -312,6 +307,8 @@ function ai_coroutine()
             attack_coroutine_u2 = best_fight_u
             attack_coroutine()
             has_attacked = true
+
+            u:complete_move()  -- rest
           end
         end
 
@@ -384,7 +381,7 @@ function ai_coroutine()
               end
             end
 
-            u.is_resting = true
+            u:complete_move()
           end
         end
 
@@ -656,7 +653,8 @@ function attack_coroutine()
     explode_at = attack_coroutine_u1.p
     attack_coroutine_u1:kill()
   else
-    attack_coroutine_u1.is_resting = true
+    -- rest
+    attack_coroutine_u1:complete_move()
   end
 
   if attack_coroutine_u2.hp < 1 then
@@ -813,7 +811,7 @@ function selector_update()
       elseif selector_selection_type == 2 then
        
         if selector_prompt_options[selector_prompt_selected] == 1 then
-          selector_selection.is_resting = true
+          selector_selection:complete_move()
           sfx(1)
           selector_stop_selecting()
         elseif selector_prompt_options[selector_prompt_selected] == 2 then
@@ -1419,12 +1417,6 @@ function make_structure(struct_type, p, team)
   end
   struct.animator = make_animator(struct, 0.4, struct_sprite, -58, team, {0, -3}, nil, active_animator)
 
-  struct.update = function(self)
-    if not get_unit_at_pos(self.p) then
-      self.capture_left = 20
-    end
-  end
-
   struct.draw = function(self)
     rectfill(self.p[1], self.p[2], self.p[1] + 7, self.p[2] + 7, 3)
     self.animator:draw()
@@ -1480,11 +1472,10 @@ function make_unit(unit_type_index, p, team)
  
   unit.active = true
 
- 
-  unit.cached_p = {}
+  -- points to move to one at a time
+  -- unit.cached_p = {}
   unit.movement_points = {}
   unit.cached_sprite = unit.sprite
-
  
   unit.animator = make_animator(
     unit,
@@ -1633,21 +1624,18 @@ function make_unit(unit_type_index, p, team)
 
   end
 
-  unit.kill = function(self)
-    sfx(8)
-    self.active = false
-    players_units_lost[players_reversed[unit.team]] += 1
-    del(units, self)
-  end
+  unit.complete_move = function(self)
+    self.is_resting = true
 
-  unit.capture = function(self)
-    for struct in all(structures) do
-      if points_equal(struct.p, self.p) then
-        struct:capture(self)
-        self.is_resting = true
-        break
+    -- reset capture on structure if we're leaving it
+    if self.cached_p and not points_equal(self.p, self.cached_p) then
+      local struct = get_struct_at_pos(self.cached_p)
+      if struct and self.index < 3 then
+        struct.capture_left = 20
       end
     end
+
+    self.cached_p = nil
   end
 
   unit.unmove = function(self)
@@ -1664,6 +1652,30 @@ function make_unit(unit_type_index, p, team)
     self.has_moved = false
     self.movement_i = 1
     self.movement_points = {}
+  end
+
+  unit.capture = function(self)
+    for struct in all(structures) do
+      if points_equal(struct.p, self.p) then
+        struct:capture(self)
+        self:complete_move() -- rest
+        break
+      end
+    end
+  end
+
+  unit.kill = function(self)
+    sfx(8)
+
+    -- uncapture struct at position
+    local struct = get_struct_at_pos(self.p)
+    if struct then
+      struct.capture_left = 20
+    end
+
+    self.active = false
+    players_units_lost[players_reversed[unit.team]] += 1
+    del(units, self)
   end
 
   unit.tile_mobility = function(self, tile)
