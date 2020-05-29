@@ -58,10 +58,16 @@ Done
  * Maps menu
 
 
+
 Bugs-to-fix
 -----------
 
 * Getting units attack range doesn't account for places they can't move to(like mountains)
-* If you have zero gold, infantry is selected by default and you can still build it.
 * The build-unit prompt shows the same goldcost for player 2 as player 1. Fix it so each player sees their own goldcost for each unit
+
+
+Bugs Squashed
+-------------
+
 * AI can attack and capture in the same turn
+* If you have zero gold, infantry is selected by default and you can still build it.
