@@ -900,14 +900,10 @@ function selector_update()
           selector_movable_tiles = selector_selection:get_movable_tiles()[1]
           selector_selection_type = 6
         end
-      elseif btnp5 then
+      elseif btnp5 and selector_selection.ranged then
         sfx(2)
         selector_selecting = true
-        if selector_selection.ranged then
-          selector_movable_tiles = selector_selection:ranged_attack_tiles()
-        else
-          selector_movable_tiles = selector_selection:get_movable_tiles(1, true)[1]
-        end
+        selector_movable_tiles = selector_selection:ranged_attack_tiles()
         selector_selection_type = 5
       end
     elseif btnp4 and selection[1] == 1 and not get_unit_at_pos(selector_p) then
@@ -1524,17 +1520,11 @@ function make_unit(unit_type_index, p, team)
     self.animator:draw()
   end
 
-  unit.get_movable_tiles = function(self, travel_offset, add_enemy_units_to_return)
-   
-   
-   
-
-   
-   
+  unit.get_movable_tiles = function(self, add_enemy_units_to_return)
     travel_offset = travel_offset or 0
 
     local current_tile
-    local tiles_to_explore = {{self.p, self.travel + travel_offset}} 
+    local tiles_to_explore = {{self.p, self.travel}}
     local movable_tiles = {}
     local tiles_with_our_units = {}
     local explore_i = 0 
