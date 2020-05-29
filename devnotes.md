@@ -65,8 +65,10 @@ The below are notes for my use during development.
   -- menu prompt for ending turn: 4
   -- unit attack range selection: 5
   -- enemy unit movement range selection: 6
-  -- unit attacking: 7
+  -- unit actively attacking: 7
   -- constructing unit: 8
+  -- unloading units(from APC): 9
+
   -- selector_selection_type = nil
 
   -- currently selected object

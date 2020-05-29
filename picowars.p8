@@ -20,10 +20,8 @@ team_index_to_palette = {
 
 team_icon = {}
 
--- saves a couple tokens
 dead_str = 'dead'
 
--- globals
 last_checked_time = 0.0
 delta_time = 0.0
 unit_id_i = 0
@@ -84,7 +82,6 @@ function _draw()
     pal()
   end
   
-  -- sort units by their y position for drawing
   sort_table_by_f(units, function(u1, u2) return u1.p[2] > u2.p[2] end)
   for unit in all(units) do
     unit:draw()
@@ -239,9 +236,9 @@ function ai_coroutine()
               has_attacked = true
             end
           end
-        elseif (u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team)) then
-          -- if we're not an infantry or we're an infantry that's not capturing, look for the best melee attack we can make
-          -- melee attacks
+        elseif u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team) then
+          -- if we're not an infantry or we're an infantry that's not capturing, then 
+          -- look for the best melee attack we can make
           local attackables = {}
 
           -- get the positions we can attack enemies from
@@ -540,10 +537,10 @@ function ai_calculate_attack_value(u, u2, tile)
 end
 
 -- tile utilities
-function get_unit_at_pos(p)
+function get_unit_at_pos(p, filter_function)
   -- returns the unit at pos, or returns nil if there isn't a unit there
   for unit in all(units) do
-    if points_equal(p, unit.p) then
+    if points_equal(p, unit.p) and (not filter_function or filter_function(unit)) then
       return unit
     end
   end
@@ -611,7 +608,7 @@ function attack_coroutine()
     yield()
   end
   -- do response attack
-  if attack_coroutine_u2.hp > 0 and not attack_coroutine_u1.ranged and not attack_coroutine_u2.ranged then
+  if attack_coroutine_u2.hp > 0 and not attack_coroutine_u1.ranged and not attack_coroutine_u2.ranged and not attack_coroutine_u2.is_carrier then
     selector_p = copy_v(attack_coroutine_u1.p)
     attack_timer = 0
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
@@ -729,6 +726,7 @@ function selector_init()
   add(selector_prompt_texts[2], "rest")
   add(selector_prompt_texts[2], "attack")
   add(selector_prompt_texts[2], "capture")
+  add(selector_prompt_texts[2], "load")
   selector_prompt_texts[4] = {}
   add(selector_prompt_texts[4], "end turn")
   selector_prompt_texts[8] = {{}, {}}  -- unit construction prompt texts filled in programmatically
@@ -774,8 +772,8 @@ function selector_update()
     elseif btnp4 then 
       if selector_selection_type == 0 then
         -- do unit selection
-        local unit_at_pos = get_unit_at_pos(selector_p)
-        if unit_at_pos and unit_at_pos.id ~= selector_selection.id then
+        local u_at_p = get_unit_at_pos(selector_p)
+        if u_at_p and u_at_p.id ~= selector_selection.id and not (u_at_p.is_carrier and not u_at_p.carrying) then
           -- couldn't move to position. blocked by unit
           sfx(4)
         else
@@ -793,9 +791,15 @@ function selector_update()
           selector_stop_selecting()
         elseif selector_prompt_options[selector_prompt_selected] == 2 then
           selector_start_attack_selection()
-        else
+        elseif selector_prompt_options[selector_prompt_selected] == 3 then
           selector_selection:capture()
           selector_stop_selecting()
+        elseif selector_prompt_options[selector_prompt_selected] == 4 then
+          local carrier = get_unit_at_pos(selector_selection.p, function(u) return u.is_carrier and not u.carrying end)
+          selector_selection:store(carrier)
+          selector_stop_selecting()
+        elseif selector_prompt_options[selector_prompt_selected] == 5 then
+          selector_start_unload_selection()
         end
       elseif selector_selection_type == 3 then
         -- do begin attacking
@@ -1054,6 +1058,18 @@ function selector_start_unit_prompt()
     add(selector_prompt_options, 3)
   end
 
+  local u = get_unit_at_pos(selector_selection.p, function(u) return u.is_carrier and not u.carrying end)
+  if u and selector_selection.index < 3 then
+    -- ensure we're an infantry or mech with `selector_selection.index < 3`
+    -- offer loading as the only option
+    selector_prompt_options = {4}
+  end
+
+  if selector_selection.is_carrying then
+    -- unload option
+    selector_prompt_options = {5}
+  end
+
   selector_prompt_selected = #selector_prompt_options
 end
 
@@ -1078,7 +1094,7 @@ end
 function selector_start_menu_prompt()
   selector_selection_type = 4
 
-  selector_prompt_options = {1}  -- end turn is in options by default
+  selector_prompt_options = {1}  -- end turn in options by default
   selector_prompt_selected = 1
 
   sfx(6)
@@ -1090,6 +1106,20 @@ function selector_start_attack_selection()
 
   for i = 1, #selector_attack_targets do
     add(selector_prompt_options, i)
+  end
+  selector_prompt_selected = 1
+
+  sfx(6)
+end
+
+function selector_start_unload_selection()
+  selector_selection_type = 9
+  selector_prompt_options = {}
+
+  for i, t in pairs(get_tile_adjacents(selector_selection.p)) do
+    if selector_selection.carrying:tile_mobility(t) < 255 and not get_unit_at_pos(t) then
+      add(selector_prompt_options, i)
+    end
   end
   selector_prompt_selected = 1
 
@@ -1496,10 +1526,6 @@ function make_unit(unit_type_index, p, team)
     -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
     -- the second table is the rest of the tiles they could move to if their own units weren't occupying them. 
 
-    -- travel_offset increases the distance of the search by one. you can determine areas of attack of setting this to 1
-    -- if we want to see the enemy units we can attack, we should also set `add_enemy_units_to_return` to true. 
-    travel_offset = travel_offset or 0
-
     local current_tile
     local tiles_to_explore = {{self.p, self.travel}}  -- store the {point, travel leftover}
     local movable_tiles = {}
@@ -1520,10 +1546,12 @@ function make_unit(unit_type_index, p, team)
         if has_added_to_movable_tiles then break end
       end
       if not has_added_to_movable_tiles then
-        if get_unit_at_pos(current_t) then
-          add(tiles_with_our_units, current_t)
-        else
+        local u = get_unit_at_pos(current_t)
+        if not u or (self.index < 3 and u.is_carrier and not u.carrying) then
+          -- add the tile to the list if there's no unit there or we can load into the unit
           add(movable_tiles, current_t)
+        else
+          add(tiles_with_our_units, current_t)
         end
       end
 
@@ -1554,6 +1582,20 @@ function make_unit(unit_type_index, p, team)
       end
     end
     return {movable_tiles, tiles_with_our_units}
+  end
+
+  unit.store = function(self, carrier)
+    self.active = false
+    self.p = {-32767, -32767} -- hide unit off camera
+    sfx(21)
+    carrier.carrying = self
+  end
+
+  unit.unload = function(self, p)
+    self.carrying.active = true
+    self.carrying.is_resting = true
+    self.carrying.p = p
+    self.carrying = nil
   end
 
   unit.move = function(self, points)
@@ -1719,6 +1761,8 @@ function make_unit(unit_type_index, p, team)
     if not p then p = self.p end
     if self.ranged then
       tiles = self:ranged_attack_tiles(p)
+    elseif self.is_carrier then
+      return {}
     else
       tiles = get_tile_adjacents(p)
     end
@@ -1933,10 +1977,6 @@ function sort_table_by_f(a, f)
 end
 
 function point_in_table(p, t, keys)
-  -- returns the index of the first point that matches if it is in the table
-  -- otherwise returns nil
-
-  -- if keys is true we instead compare p against the table's keys and return the value.
   for i, p2 in pairs(t) do
     if keys then 
       if points_equal(p, i) then return p2 end  -- compare p with keys
@@ -1952,7 +1992,7 @@ function table_point_index(t, p)
   for k, v in pairs(t) do
     if points_equal(p, k) then return v end
   end
-  return 32767  -- return (essentiall) infinity if the point isn't in the table. this is for pathfinding
+  return 32767
 end
 
 function merge_tables(t1, t2)
@@ -2038,6 +2078,28 @@ function get_tile_adjacents(p)
      {p[1] - 8, p[2]}}
 end
 
+function get_tile_info(tile)
+  -- returns the {tile name, its defense, its structure type(if applicable), and its team(if applicable)}
+  if fget(tile, 1) then
+    local team
+    if fget(tile, 6) then team = players[1] elseif fget(tile, 7) then team = players[2] end
+    if fget(tile, 2) then return {"hq★★★★", 0.25, 1, team}
+    elseif fget(tile, 3) then return {"city★★★", 0.4, 2, team}
+    elseif fget(tile, 4) then return {"base★★★", 0.4, 3, team}
+    end
+  end
+  if fget(tile, 0) then
+    if fget(tile, 1) then return {"road", 1.0}
+    elseif fget(tile, 6) then return {"plain★", 0.8}
+    elseif fget(tile, 3) then return {"wood★★", 0.6}
+    elseif fget(tile, 4) then return {"mntn★★★★", 0.25}
+    elseif fget(tile, 2) then return {"river", 1.0}
+    elseif fget(tile, 5) then return {"cliff", 1.0}
+    end
+  end
+  return {"unmovable", 0} -- no info
+end
+
 -- priority queue code
 -- edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
 prioqueue = {}
@@ -2114,9 +2176,6 @@ function prioqueue:pop()
 
   return {returnval, returnpriority}
 end
-
-
-#include lib.p8
 
 
 __gfx__
@@ -2434,7 +2493,7 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000300000d65011650246502a6502e650186500d6500c65018650256502d650326502265006650006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600
 000400003f6400464000640026403f6400364000640026403f6400264000640056403f6400064000640006403f6400464001640006403f6400464000640066403f64000640006400064000640006400064000640
 000400003965034650336402f6402964025640226400c6400b6400864006640046400364003640026400264002640036400564007640076400464000600066003f60000600006000060000600006000060000600
 000300003f640046403f640026403f640036403f640026403f640026403f640056403f640036403f640046403f640046403f640076403f640046403f640066403f64000640006400064000640006400064000640
