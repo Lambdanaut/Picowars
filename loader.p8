@@ -253,7 +253,7 @@ function update_verses_menu()
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
 
-    write_assets(current_map, {make_sami(), make_alecia()}, players_human)
+    write_assets(current_map, {make_hachi(), make_alecia()}, players_human)
   elseif btnp5 then
     -- back to main menu
     sfx(1)

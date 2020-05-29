@@ -731,11 +731,13 @@ function selector_init()
   add(selector_prompt_texts[2], "capture")
   selector_prompt_texts[4] = {}
   add(selector_prompt_texts[4], "end turn")
-  selector_prompt_texts[8] = {}  -- unit construction prompt texts filled in programmatically
+  selector_prompt_texts[8] = {{}, {}}  -- unit construction prompt texts filled in programmatically
 
-  for unit_type in all(players_unit_types[players_turn]) do
-    -- fill in unit type construction prompt texts
-    add(selector_prompt_texts[8], unit_type.cost .. "g: " .. unit_type.type)
+  for i=1,2 do
+    for unit_type in all(players_unit_types[i]) do
+      -- fill in unit type construction prompt texts
+      add(selector_prompt_texts[8][i], unit_type.cost .. "g: " .. unit_type.type)
+    end
   end
 
   -- targets within attack range
@@ -1101,6 +1103,11 @@ function selector_draw_prompt()
   for i, prompt in pairs(selector_prompt_options) do
     local bg_color = 6
     prompt_text = selector_prompt_texts[selector_selection_type][prompt]
+
+    if selector_selection_type == 8 then
+      -- select player-specific prompt for unit production
+      prompt_text = selector_prompt_texts[selector_selection_type][players_turn][prompt]
+    end
     if i == selector_prompt_selected then 
       bg_color = 14
       prompt_text = prompt_text .. "!"
@@ -1111,6 +1118,10 @@ function selector_draw_prompt()
   end
   for disabled_prompt in all(selector_prompt_options_disabled) do
     prompt_text = selector_prompt_texts[selector_selection_type][disabled_prompt]
+    if selector_selection_type == 8 then
+      -- select player-specific prompt for unit production
+      prompt_text = selector_prompt_texts[selector_selection_type][players_turn][disabled_prompt]
+    end
     draw_msg({selector_p[1], selector_p[2] - y_offset}, prompt_text, 8)
     y_offset += 9
   end
