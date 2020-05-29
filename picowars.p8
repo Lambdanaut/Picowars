@@ -101,12 +101,11 @@ function _draw()
   end
 end
 
--- lvl manager code
 players_turn = 0
 players = {}
 players_human = {}
 players_co_name = {}
-players_hqs = {}  -- the hqs for the two players
+players_hqs = {}
 players_gold = {0, 0}
 players_units_lost = {0, 0}
 players_units_built = {0, 0}
@@ -116,14 +115,13 @@ players_co_icon = {}
 units = {}
 turn_i = 0
 function end_game(reason)
-  -- end the game
   -- reasons:
   -- * 1: victory player 1
   -- * 2: victory player 2
   -- * 3: abandon mission
 
-  -- write match result to memory
-  memory_i = 0x5ddd -- beginning of match result memory
+  -- write match result
+  memory_i = 0x5ddd
   poke_increment(reason)
   for i = 1, 2 do
     poke_increment(players_units_lost[i])
@@ -190,7 +188,6 @@ function ai_update()
   merge_tables(ai_units, ai_units_infantry)  -- then infantry
   merge_tables(ai_units, other_ai_units)  -- then other units
 
-  -- run primary coroutine thread
   if not active_ai_coroutine then
     active_ai_coroutine = cocreate(ai_coroutine)
   elseif costatus(active_ai_coroutine) == dead_str then
@@ -287,7 +284,6 @@ function ai_coroutine()
             goal = players_hqs[players_turn].p
           elseif u.hp < 4 or (u.hp < 9 and get_struct_at_pos(u.p, players_turn_team, nil, nil, 3)) then
             -- if our health is low, or we're healing and standing on a structure that's not a base, navigate to the nearest friendly city/hq
-            -- refac: combine this with the capture structures for loop below. maybe a "get_nearest_struct" function or "get_nearest_obj"
             local nearest_struct
             local nearest_struct_d = 32767
             for struct in all(structures) do
@@ -367,7 +363,7 @@ function ai_coroutine()
       -- build unit for each of our bases
 
       -- get unit counts
-      -- artificially add 1 to counts to stop division by 0 errors
+      -- add 1 to counts to stop division by 0 errors
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
@@ -439,7 +435,6 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
   while #tiles_to_explore.values > 0 and #tiles_to_explore.values < 100 do
     -- explore the next tile in tiles_to_explore
 
-
     -- set the current tile to be the tile in tiles_to_explore with the lowest f_score
     -- current_tile is two parts {{x, y}, f_score}
     current_tile = tiles_to_explore:pop()
@@ -455,7 +450,7 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
         if point_in_table(current_t, return_path) then
           -- bug detected. avoid crash
           -- loop detected, return empty path
-          -- this fixes a nasty bug that happens some games on certain maps where somehow the
+          -- this fixes a bug that happens some games on certain maps where somehow the
           -- pathfinder sets a parent of a child to be the parent of its parent. ({0,1} => {1,0}, {1,0} => {0,1})
           return {unit.p}
         end
@@ -464,11 +459,6 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
       end
       return return_path
     end
-
-    -- if debug then
-    --   rectfill(current_t[1], current_t[2], current_t[1] + 8, current_t[2] + 8, 0)
-    --   yield()
-    -- end
 
     -- explore this tile's neighbors
     local current_t_g_score = table_point_index(g_scores, current_t)
@@ -495,9 +485,6 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
           g_scores[t] = new_g_score
           local new_f_score = new_g_score + manhattan_distance(t, target)
 
-          -- in the wiki pseudocode it says to record the fscore even if the point is already in the to_explore list
-          -- we're not doing that and things seem fine. just keep an eye out if we see weird behavior
-          -- https://en.wikipedia.org/wiki/a*_search_algorithm#pseudocode
           if not tiles_to_explore_point_i_or_nil then
             -- if the point isn't already in tiles_to_explore, add it. 
             tiles_to_explore:add(t, new_f_score)
@@ -650,7 +637,6 @@ end
 function end_turn_coroutine()
   end_turn_timer = 0
 
-  -- play turn ending sfx and stop music
   sfx(7)
   music(-1, 300)
 
@@ -740,9 +726,6 @@ function selector_init()
 
   -- targets within attack range
   selector_attack_targets = {}
-
-  -- unit we're actively attacking. used in attack coroutine
-  -- selector_attacking_unit = nil
 end
 
 function selector_update()
@@ -1735,7 +1718,6 @@ function make_unit(unit_type_index, p, team)
         if self.mobility_type == 0 then return 2
         elseif self.mobility_type == 1 then return 1
         end
-        -- else return 255 end
       end
     elseif fget(tile, 1) then return 1 end
     return 255 -- unwalkable if all other options are exhausted
