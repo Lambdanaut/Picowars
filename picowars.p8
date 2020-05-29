@@ -629,9 +629,10 @@ function point_closest_to_p(points, p)
   return closest
 end
 
-attack_coroutine = function()
- 
-  currently_attacking = true
+function attack_coroutine()
+  -- coroutine action that plays out an attack
+  attack_coroutine_u1.currently_attacking = true
+  attack_coroutine_u2.currently_attacking = true
 
  
   selector_p = copy_v(attack_coroutine_u2.p)
@@ -678,7 +679,8 @@ attack_coroutine = function()
   end
   explode_at = nil
 
-  currently_attacking = false
+  attack_coroutine_u1.currently_attacking = false
+  attack_coroutine_u2.currently_attacking = false
 end
 
 end_turn_coroutine = function()
@@ -985,29 +987,25 @@ function selector_draw()
     end
   end
 
-  if not currently_attacking then
-
-    if last_checked_time % 3 > 1.5 then
-     
-      for u in all(units) do
-        if u.hp < 10 then
-          set_palette(u.team)
-          rectfill(u.p[1] + 1, u.p[2], u.p[1] + 5, u.p[2] + 6, 8)
-          print(u.hp, u.p[1] + 2, u.p[2] + 1, 0)
-          pal()
-        end
+  if last_checked_time % 3 > 1.5 then
+    -- draw unit hp
+    for u in all(units) do
+      if u.hp < 10 and not u.currently_attacking then
+        set_palette(u.team)
+        rectfill(u.p[1] + 1, u.p[2], u.p[1] + 5, u.p[2] + 6, 8)
+        print(u.hp, u.p[1] + 2, u.p[2] + 1, 0)
+        pal()
       end
-    else
-     
-      for struct in all(structures) do
-        if struct.capture_left < 20 then
-          local rect_offset = 0
-          if struct.capture_left > 9 then
-            rect_offset = 4
-          end
-          rectfill(struct.p[1] + 1, struct.p[2], struct.p[1] + 5 + rect_offset, struct.p[2] + 6, 6)
-          print(struct.capture_left, struct.p[1] + 2, struct.p[2] + 1, 0)
+    end
+  else
+    for struct in all(structures) do
+      if struct.capture_left < 20 then
+        local rect_offset = 0
+        if struct.capture_left > 9 then
+          rect_offset = 4
         end
+        rectfill(struct.p[1] + 1, struct.p[2], struct.p[1] + 5 + rect_offset, struct.p[2] + 6, 6)
+        print(struct.capture_left, struct.p[1] + 2, struct.p[2] + 1, 0)
       end
     end
   end
