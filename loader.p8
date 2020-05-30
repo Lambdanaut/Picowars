@@ -92,12 +92,12 @@ ai_unit_ratio_war_tank = 12
 
 -- byte constants
 starting_memory = 0x4300
-match_result_memory = 0x5ddd
 
 -- menu index
 -- 1=splash screen
 -- 2=vs selection
 -- 3=campaign dialogue
+-- 4=victory/defeat screen
 menu_index = 1
 
 main_menu_selected = 0
@@ -134,6 +134,19 @@ function _init()
   write_save()
   read_save()
 
+  -- read match result
+  read_match_result()
+
+  -- read match metadata
+  read_match_meta()
+  clear_match_meta()  -- reset match meta memory bits
+
+  match_meta_coming_from_match = true
+
+  if match_meta_coming_from_match then
+    menu_index = 4  -- victory/defeat screen
+  end
+
 end
 
 function _update()
@@ -158,6 +171,8 @@ function _update()
     update_verses_menu()
   elseif menu_index == 3 then
     update_campaign()
+  elseif menu_index == 4 then
+    update_victory_defeat_menu()
   end
 
 end
@@ -194,6 +209,8 @@ function _draw()
     end
   elseif menu_index == 3 then
     draw_campaign()
+  elseif menu_index == 4 then
+    draw_victory_defeat_menu()
   end
 end
 
@@ -274,6 +291,23 @@ end
 function update_campaign()
 end
 
+function update_victory_defeat_menu()
+  if btnp4 then 
+    sfx(1)
+
+    if match_meta_level_index > 0 and match_result_reason == 1 then
+      -- campaign level victory. increment campaign counter, save game, and continue to next mission.
+      campaign_level_index += 1
+      init_campaign()
+      write_save()
+      menu_index = 3
+    else
+      -- not campaign mission. return to main menu
+      menu_index = 1
+    end
+  end
+end
+
 function draw_main_menu()
   for x = 0, 1 do
     spr(last_checked_time*2 % 2, 24 + x*73, 54, 1, 2, x==1)
@@ -300,7 +334,7 @@ end
 
 function draw_campaign()
   -- draw map
-  rectfill(0, 0, 128, 128, 12)
+  cls(12)
   map(0, 31, current_level.map_pos[1], current_level.map_pos[2], 16, 16)
 
   if not active_dialogue_coroutine then
@@ -318,6 +352,9 @@ function draw_campaign()
     coresume(active_dialogue_coroutine)
   end
 
+end
+
+function draw_victory_defeat_menu()
 end
 
 function start_map()
@@ -1018,6 +1055,7 @@ co_slydy = make_slydy()
 function level_1()
   local l = {}
 
+  l.index = 1
   l.map = camp_map_1()
   l.map_pos = {35, 30}
   l.co_p1 = make_hachi()
@@ -1182,6 +1220,35 @@ function read_save()
   -- read available war maps to disk
 end
 
+function read_match_meta()
+  memory_i = 0x5ddc
+
+  match_meta_coming_from_match = peek_increment() == 1
+  match_meta_level_index = peek_increment()
+  match_meta_p1_team_index = peek_increment()
+  match_meta_p2_team_index = peek_increment()
+end
+
+function write_match_meta(level_index, p1_team_index, p2_team_index)
+  -- writes metadata about a match to be read by loader after the match
+  memory_i = 0x5ddc
+
+  poke_increment(1)  -- bool to indicate we're entering a match
+  poke_increment(level_index)
+  poke_increment(p1_team_index)
+  poke_increment(p2_team_index)
+end
+
+function clear_match_meta()
+  -- clears match metadata. run on loader startup
+  memory_i = 0x5ddc
+
+  while memory_i < 0x5ddd do
+    memory_i += 1
+    poke_increment(0)
+  end
+end
+
 function read_match_result()
   -- reads a match's results from memory and sets global variables for each of them
 
@@ -1192,6 +1259,8 @@ function read_match_result()
   -- * 2: victory player 2
   -- * 3: abandon mission
   match_result_reason = peek_increment()
+  match_result_units_lost = {}
+  match_result_units_built = {}
   for i = 1, 2 do
     match_result_units_lost[i] = peek_increment()
     match_result_units_built[i] = peek_increment()
