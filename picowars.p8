@@ -3,6 +3,7 @@ version 27
 __lua__
 -- pico wars
 -- by lambdanaut
+-- https://lambdanaut.com
 -- https://lambdanaut.itch.io/
 -- https://twitter.com/lambdanaut
 -- thanks to nintendo for making advance wars
@@ -134,30 +135,22 @@ function _draw()
     for structure in all(structures) do
       structure:draw()
     end
-
-   
     for i = 1, 2 do
       local hq = players_hqs[i]
       set_palette(hq.team)
       spr(67, hq.p[1], hq.p[2] - 11)
       pal()
     end
-    
-   
     sort_table_by_f(units, function(u1, u2) return u1.p[2] > u2.p[2] end)
     for unit in all(units) do
       unit:draw()
     end
-
     selector_draw()
-
-   
     if active_end_turn_coroutine and costatus(active_end_turn_coroutine) == dead_str then
       active_end_turn_coroutine = nil
     elseif active_end_turn_coroutine then
       coresume(active_end_turn_coroutine)
     end
-
     if not active_end_turn_coroutine then
       ai_update()
     end
@@ -415,7 +408,7 @@ function ai_coroutine()
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
-      local unit_counts = {1, 1, 1, 1, 1, 1, 1, 1}
+      local unit_counts = {0, 0, 0, 0, 0, 0, 0, 0}
 
       for u in all(units) do
         if u.team == players_turn_team then
@@ -439,6 +432,7 @@ function ai_coroutine()
 
       if to_build then
         struct:build(to_build)
+        selector_p = copy_v(struct.p)
       end
 
     end
@@ -630,7 +624,6 @@ function point_closest_to_p(points, p)
 end
 
 function attack_coroutine()
-  -- coroutine action that plays out an attack
   attack_coroutine_u1.currently_attacking = true
   attack_coroutine_u2.currently_attacking = true
 
@@ -988,7 +981,6 @@ function selector_draw()
   end
 
   if last_checked_time % 3 > 1.5 then
-    -- draw unit hp
     for u in all(units) do
       if u.hp < 10 and not u.currently_attacking then
         set_palette(u.team)
@@ -1108,7 +1100,7 @@ end
 
 function selector_start_menu_prompt()
   selector_selection_type = 4
-  selector_prompt_options = {1,2}  -- end turn in options by default
+  selector_prompt_options = {1,2}
   selector_prompt_selected = 1
 
   sfx(6)
@@ -2017,7 +2009,6 @@ function get_tile_adjacents(p)
 end
 
 function get_tile_info(tile)
-  -- returns the {tile name, its defense, its structure type(if applicable), and its team(if applicable)}
   if fget(tile, 1) then
     local team
     if fget(tile, 6) then team = players[1] elseif fget(tile, 7) then team = players[2] end
@@ -2035,11 +2026,9 @@ function get_tile_info(tile)
     elseif fget(tile, 6) then return {"plain★", 0.85}
     end
   end
-  return {"unmovable", 0} -- no info
+  return {"unmovable", 0}
 end
 
--- priority queue code
--- edited from: https://github.com/roblox/wiki-lua-libraries/blob/master/standardlibraries/priorityqueue.lua
 prioqueue = {}
 prioqueue.__index = prioqueue
 

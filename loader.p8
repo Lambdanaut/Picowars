@@ -28,7 +28,6 @@ unit_war_tank = "war tank"
 unit_index_infantry = 1
 unit_index_mech = 2
 unit_index_recon = 3
--- unit_index_apc = 4
 unit_index_artillery = 4
 unit_index_tank = 5
 unit_index_rocket = 6
@@ -60,14 +59,14 @@ team_index_to_team_icon = {
 
 -- ai unit ratios
 -- must add up to 100
-ai_unit_ratio_infantry = 5
+ai_unit_ratio_infantry = 25
 ai_unit_ratio_mech = 12
-ai_unit_ratio_recon = 21
+ai_unit_ratio_recon = 15
 ai_unit_ratio_apc = 0
-ai_unit_ratio_artillery = 17
-ai_unit_ratio_tank = 16
-ai_unit_ratio_rocket = 14
-ai_unit_ratio_war_tank = 14
+ai_unit_ratio_artillery = 13
+ai_unit_ratio_tank = 12
+ai_unit_ratio_rocket = 11
+ai_unit_ratio_war_tank = 12
 
 -- byte constants
 starting_memory = 0x4300
@@ -382,7 +381,6 @@ function make_guster()
   co.units[unit_index_infantry].ai_unit_ratio = 10
   co.units[unit_index_mech].ai_unit_ratio = 5
   co.units[unit_index_recon].ai_unit_ratio = 5
-  -- co.units[unit_index_apc].ai_unit_ratio = 6
   co.units[unit_index_artillery].ai_unit_ratio = 32
   co.units[unit_index_tank].ai_unit_ratio = 5
   co.units[unit_index_rocket].ai_unit_ratio = 32
@@ -445,7 +443,6 @@ function make_infantry()
   dc[unit_index_infantry] = 5.5
   dc[unit_index_mech] = 4.5
   dc[unit_index_recon] = 1.2
-  -- dc[unit_index_apc] = 1.4
   dc[unit_index_artillery] = 1.5
   dc[unit_index_tank] = 0.5
   dc[unit_index_rocket] = 2.5
@@ -478,7 +475,6 @@ function make_mech()
   dc[unit_index_infantry] = 6.5
   dc[unit_index_mech] = 5.5
   dc[unit_index_recon] = 8.5
-  -- dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -515,44 +511,10 @@ function make_recon()
   dc[unit_index_infantry] = 7.6
   dc[unit_index_mech] = 6.8
   dc[unit_index_recon] = 3.8
-  -- dc[unit_index_apc] = 4.5
   dc[unit_index_artillery] = 4.5
   dc[unit_index_tank] = 0.6
   dc[unit_index_rocket] = 5.5
   dc[unit_index_war_tank] = 0.1
-  unit.damage_chart = dc
-
-  return unit
-end
-
-function make_apc()
-  local unit = {}
-
-  unit.index = unit_index_apc
-  unit.type = unit_apc
-  unit.sprite = 23
-  unit.mobility_type = mobility_treads
-  unit.travel = 7
-  unit.cost = 5
-  unit.range_min = 0
-  unit.range_max = 0
-  unit.luck_max = 1
-  unit.capture_bonus = 0
-  unit.struct_heal_bonus = 0
-  unit.ai_unit_ratio = ai_unit_ratio_apc
-  unit.moveout_sfx = sfx_tank_moveout
-  unit.combat_sfx = 0  -- no combat
-  unit.is_carrier = true
-
-  dc = {}
-  dc[unit_index_infantry] = 0
-  dc[unit_index_mech] = 0
-  dc[unit_index_recon] = 0
-  -- dc[unit_index_apc] = 0
-  dc[unit_index_artillery] = 0
-  dc[unit_index_tank] = 0
-  dc[unit_index_rocket] = 0
-  dc[unit_index_war_tank] = 0
   unit.damage_chart = dc
 
   return unit
@@ -581,7 +543,6 @@ function make_artillery()
   dc[unit_index_infantry] = 9
   dc[unit_index_mech] = 8.5
   dc[unit_index_recon] = 8
-  -- dc[unit_index_apc] = 7
   dc[unit_index_artillery] = 7.5
   dc[unit_index_tank] = 7
   dc[unit_index_rocket] = 8
@@ -614,7 +575,6 @@ function make_tank()
   dc[unit_index_infantry] = 3.5
   dc[unit_index_mech] = 3.0
   dc[unit_index_recon] = 8.5
-  -- dc[unit_index_apc] = 7.5
   dc[unit_index_artillery] = 7.0
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
@@ -647,7 +607,6 @@ function make_rocket()
   dc[unit_index_infantry] = 9.5
   dc[unit_index_mech] = 9
   dc[unit_index_recon] = 9
-  -- dc[unit_index_apc] = 8
   dc[unit_index_artillery] = 8
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 8.5
@@ -680,7 +639,6 @@ function make_war_tank()
   dc[unit_index_infantry] = 10.5
   dc[unit_index_mech] = 9.5
   dc[unit_index_recon] = 10.5
-  -- dc[unit_index_apc] = 10.5
   dc[unit_index_artillery] = 10.5
   dc[unit_index_tank] = 8.5
   dc[unit_index_rocket] = 10.5
@@ -690,6 +648,222 @@ function make_war_tank()
   return unit
 end
 
+-- commanders
+function make_commanders()
+  commanders = {
+    make_dan(),
+    make_sami(),
+    make_hachi(),
+    make_bill(),
+    make_guster(),
+    make_slydy(),
+  }
+end
+
+function make_dan()
+  local co = {}
+
+  co.name = "dan"
+  co.sprite = p_dan
+  co.team_index = 1
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = true
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- dan's units get 1 more healing from structures
+  for unit in all(co.units) do
+    unit.struct_heal_bonus = 1
+  end
+
+  return co
+end
+co_dan = make_dan()
+
+function make_sami()
+  local co = {}
+
+  co.name = "sami"
+  co.sprite = p_sami
+  co.team_index = 1  -- orange star
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- sami's infantry, mechs, and apc travels further
+  co.units[1].travel += 1
+  co.units[2].travel += 1
+  co.units[4].travel += 1
+
+  -- sami's infantry and mechs have a +5 to their capture rate
+  co.units[1].capture_bonus += 5
+  co.units[2].capture_bonus += 5
+
+  -- sami's infantry and mechs have 30% more attack
+  for i in all({unit_index_infantry, unit_index_mech}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- sami's non-infantry units have 10% less attack
+  for i=3,#co.units do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 0.9
+    end
+  end
+
+  return co
+end
+co_sami = make_sami()
+
+function make_hachi()
+  local co = {}
+
+  co.name = "hachi"
+  co.sprite = p_hachi
+  co.team_index = 1
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- hachi's non-infantry and non-mech units cost 15% less
+  for i=3, #co.units do
+    co.units[i].cost = flr(co.units[i].cost * 0.85)
+  end
+
+  return co
+end
+co_hachi = make_hachi()
+
+function make_bill()
+  local co = {}
+
+  co.name = "bill"
+  co.sprite = p_bill
+  co.team_index = 2  -- blue moon
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- bill's non-infantry units have 10% more luck
+  for i=1,#co.units do
+    co.units[i].luck_max = 2
+  end
+
+  return co
+end
+co_bill = make_bill()
+
+function make_alecia()
+  local co = {}
+
+  co.name = "alecia"
+  co.sprite = p_alecia
+  co.team_index = 2
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  return co
+end
+co_alecia = make_alecia()
+
+function make_conrad()
+  local co = {}
+
+  co.name = "conrad"
+  co.sprite = p_conrad
+  co.team_index = 2
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  for unit in all(co.units) do
+    -- conrads's units are only healed by 1 by structures
+    unit.struct_heal_bonus = -1
+
+    -- all of conrads units have 10% more firepower
+    for i=1, #unit.damage_chart do
+      unit.damage_chart[i] *= 1.1
+    end
+  end
+
+  return co
+end
+co_conrad = make_conrad()
+
+function make_guster()
+  local co = {}
+
+  co.name = "guster"
+  co.sprite = p_guster
+  co.team_index = 3  -- green earth
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- guster's ranged units have +1 range
+  co.units[4].range_max += 1
+  co.units[6].range_max += 1
+
+  -- guster's ranged units have 30% more attack
+  for i in all({unit_index_artillery, unit_index_rocket}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 1.3
+    end
+  end
+
+  -- guster's non-ranged, non-infantry units have 10% less attack
+  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
+    for j=1,#co.units[i].damage_chart do
+      co.units[i].damage_chart[j] *= 0.9
+    end
+  end
+
+  -- guster's ai prioritizes ranged units
+  co.units[unit_index_infantry].ai_unit_ratio = 7
+  co.units[unit_index_mech].ai_unit_ratio = 5
+  co.units[unit_index_recon].ai_unit_ratio = 5
+  co.units[unit_index_artillery].ai_unit_ratio = 37
+  co.units[unit_index_tank].ai_unit_ratio = 5
+  co.units[unit_index_rocket].ai_unit_ratio = 36
+  co.units[unit_index_war_tank].ai_unit_ratio = 5
+
+  return co
+end
+co_guster = make_guster()
+
+function make_slydy()
+  local co = {}
+
+  co.name = "slydy"
+  co.sprite = p_slydy
+  co.team_index = 4  -- pink quasar
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  return co
+end
+co_slydy = make_slydy()
+
+-- memory read/write functions
 function write_string(string, length)
   -- writes a string to memory
   for i = 1, length do
