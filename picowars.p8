@@ -713,6 +713,7 @@ function selector_init()
   add(selector_prompt_texts[2], "attack")
   add(selector_prompt_texts[2], "capture")
   add(selector_prompt_texts[2], "load")
+  add(selector_prompt_texts[2], "unload")
   selector_prompt_texts[4] = {}
   add(selector_prompt_texts[4], "end turn")
   selector_prompt_texts[8] = {{}, {}}  -- unit construction prompt texts filled in programmatically
@@ -725,7 +726,9 @@ function selector_init()
   end
 
   -- targets within attack range
-  selector_attack_targets = {}
+  -- selector_attack_targets = {}
+  -- unload tiles
+  -- selector_unload_tiles = {}
 end
 
 function selector_update()
@@ -805,13 +808,15 @@ function selector_update()
           selector_selection:build(selector_prompt_selected)
           selector_stop_selecting()
         end
+      elseif selector_selection_type == 9 then
+        selector_selection:unload(selector_unload_tiles[selector_prompt_selected])        
+        selector_stop_selecting()
       end
     elseif btnp5 and selector_selection_type ~= 5 and selector_selection_type ~= 7 then
       -- stop selecting
       -- don't cancel if type is attack range selection or active attacking
-      if 0 < selector_selection_type and selector_selection_type < 4 then -- if selection type is 1,2, or 3
+      if (0 < selector_selection_type and selector_selection_type < 4) or selector_selection_type == 9 then -- if selection type is 1,2,3, or 9
         -- return unit to start location if he's moved
-      
         sfx(5)
         selector_selection:unmove()
         selector_p = selector_selection.p
@@ -823,10 +828,13 @@ function selector_update()
       -- do unit selection and base construction prompt
       selector_update_prompt(arrow_val)
     elseif selector_selection_type == 3 then
-      -- unit attack selection
-      -- selector follows attack target
+      -- attack selection
       selector_update_prompt(arrow_val)
       selector_p = selector_attack_targets[selector_prompt_selected].p
+    elseif selector_selection_type == 9 then
+      -- unload carrier selection
+      selector_update_prompt(arrow_val)
+      selector_p = selector_unload_tiles[selector_prompt_selected]
     end
 
   else
@@ -901,7 +909,7 @@ function selector_draw()
           end
           spr(flip + 3, t[1], t[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
           if selector_selection_type == 5 then
-            pal(7, 7)
+            pal()
           end
         end
 
@@ -915,7 +923,7 @@ function selector_draw()
         for unit in all(selector_attack_targets) do
           pal(7, 8)
           spr(flip + 3, unit.p[1], unit.p[2], 1, 1, flip > 0.5 and flip < 1.5, flip > 1)
-          pal(7, 7)
+          pal()
         end
 
       elseif selector_selection_type == 2 or selector_selection_type == 4 or selector_selection_type == 8 then
@@ -1041,16 +1049,16 @@ function selector_start_unit_prompt()
     add(selector_prompt_options, 3)
   end
 
+  if selector_selection.carrying then
+    -- unload
+    add(selector_prompt_options, 5)
+  end
+
   local u = get_unit_at_pos(selector_selection.p, function(u) return u.is_carrier and not u.carrying end)
   if u and selector_selection.index < 3 then
     -- ensure we're an infantry or mech with `selector_selection.index < 3`
     -- offer loading as the only option
     selector_prompt_options = {4}
-  end
-
-  if selector_selection.is_carrying then
-    -- unload option
-    selector_prompt_options = {5}
   end
 
   selector_prompt_selected = #selector_prompt_options
@@ -1098,10 +1106,12 @@ end
 function selector_start_unload_selection()
   selector_selection_type = 9
   selector_prompt_options = {}
+  selector_unload_tiles = {}
 
   for i, t in pairs(get_tile_adjacents(selector_selection.p)) do
-    if selector_selection.carrying:tile_mobility(t) < 255 and not get_unit_at_pos(t) then
+    if selector_selection.carrying:tile_mobility(mget(t[1] / 8, t[2] / 8)) < 255 and not get_unit_at_pos(t) then
       add(selector_prompt_options, i)
+      add(selector_unload_tiles, t)
     end
   end
   selector_prompt_selected = 1
@@ -1570,6 +1580,7 @@ function make_unit(unit_type_index, p, team)
   unit.store = function(self, carrier)
     self.active = false
     self.p = {-32767, -32767} -- hide unit off camera
+    self:complete_move() -- rest
     sfx(21)
     carrier.carrying = self
   end
@@ -1577,7 +1588,9 @@ function make_unit(unit_type_index, p, team)
   unit.unload = function(self, p)
     self.carrying.active = true
     self.carrying.is_resting = true
+    self:complete_move() -- rest
     self.carrying.p = p
+    sfx(21)
     self.carrying = nil
   end
 
