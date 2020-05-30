@@ -81,14 +81,14 @@ team_index_to_team_icon = {
 
 -- ai unit ratios
 -- must add up to 100
-ai_unit_ratio_infantry = 5
+ai_unit_ratio_infantry = 25
 ai_unit_ratio_mech = 12
-ai_unit_ratio_recon = 21
+ai_unit_ratio_recon = 15
 ai_unit_ratio_apc = 0
-ai_unit_ratio_artillery = 17
-ai_unit_ratio_tank = 16
-ai_unit_ratio_rocket = 14
-ai_unit_ratio_war_tank = 14
+ai_unit_ratio_artillery = 13
+ai_unit_ratio_tank = 12
+ai_unit_ratio_rocket = 11
+ai_unit_ratio_war_tank = 12
 
 -- byte constants
 starting_memory = 0x4300
@@ -253,7 +253,7 @@ function update_verses_menu()
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
 
-    write_assets(current_map, {make_sami(), make_hachi()}, players_human)
+    write_assets(current_map, {make_alecia(), make_alecia()}, players_human)
   elseif btnp5 then
     -- back to main menu
     sfx(1)
@@ -984,13 +984,13 @@ function make_guster()
   end
 
   -- guster's ai prioritizes ranged units
-  co.units[unit_index_infantry].ai_unit_ratio = 10
+  co.units[unit_index_infantry].ai_unit_ratio = 7
   co.units[unit_index_mech].ai_unit_ratio = 5
   co.units[unit_index_recon].ai_unit_ratio = 5
-  co.units[unit_index_apc].ai_unit_ratio = 6
-  co.units[unit_index_artillery].ai_unit_ratio = 32
+  co.units[unit_index_apc].ai_unit_ratio = 0
+  co.units[unit_index_artillery].ai_unit_ratio = 37
   co.units[unit_index_tank].ai_unit_ratio = 5
-  co.units[unit_index_rocket].ai_unit_ratio = 32
+  co.units[unit_index_rocket].ai_unit_ratio = 36
   co.units[unit_index_war_tank].ai_unit_ratio = 5
 
   return co
@@ -1020,7 +1020,7 @@ function level_1()
 
   l.map = camp_map_1()
   l.map_pos = {35, 30}
-  l.co_p1 = make_sami()
+  l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
 
   l.dialogue = {

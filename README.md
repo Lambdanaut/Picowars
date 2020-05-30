@@ -7,13 +7,11 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Main Menu
-* APC
-* APC AI
 * Dialogue
 * Save/load functionality
 * 8 Campaign missions
 * Unlockable commanders
+* Selectable team and commanders in VS mode
 * more campaign missions
 * multiplayer
 
@@ -56,6 +54,8 @@ Done
 * For Demo 2 (Splore)
  * Fill map space with maps
  * Maps menu
+* Dialogue System
+* APC
 
 
 

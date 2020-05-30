@@ -4,8 +4,6 @@ __lua__
 
 debug = true
 
--- palettes
-
 palette_orange = "orange star★"
 palette_blue = "blue moon●"
 palette_green = "green earth🅾️"
@@ -367,7 +365,7 @@ function ai_coroutine()
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
-      local unit_counts = {1, 1, 1, 1, 1, 1, 1, 1}
+      local unit_counts = {0, 0, 0, 0, 0, 0, 0, 0}
 
       for u in all(units) do
         if u.team == players_turn_team then
