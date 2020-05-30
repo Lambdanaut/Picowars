@@ -759,7 +759,8 @@ function selector_update()
       if selector_selection_type == 0 then
         -- do unit selection
         local u_at_p = get_unit_at_pos(selector_p)
-        if u_at_p and u_at_p.id ~= selector_selection.id and not (u_at_p.is_carrier and not u_at_p.carrying) then
+        if u_at_p and u_at_p.id ~= selector_selection.id and 
+          (selector_selection.index > 2 or not (u_at_p.is_carrier and not u_at_p.carrying)) then
           -- couldn't move to position. blocked by unit
           sfx(4)
         else
@@ -1819,7 +1820,9 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
 
     if self.draw_shadow then
       -- draw shadow
-      outline_sprite(animation_frame, 0, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
+      sprite_color = 0
+      if self.parent.carrying then sprite_color = 15 end
+      outline_sprite(animation_frame, sprite_color, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
     else
       -- draw sprite normally
       spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1, 1, self.flip_sprite)

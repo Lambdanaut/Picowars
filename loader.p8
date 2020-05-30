@@ -253,7 +253,7 @@ function update_verses_menu()
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
 
-    write_assets(current_map, {make_hachi(), make_alecia()}, players_human)
+    write_assets(current_map, {make_sami(), make_hachi()}, players_human)
   elseif btnp5 then
     -- back to main menu
     sfx(1)
@@ -639,7 +639,7 @@ function make_apc()
   unit.type = unit_apc
   unit.sprite = 23
   unit.mobility_type = mobility_treads
-  unit.travel = 7
+  unit.travel = 10
   unit.cost = 5
   unit.range_min = 0
   unit.range_max = 0
@@ -842,9 +842,10 @@ function make_sami()
 
   co.units = make_units()
 
-  -- sami's infantry and mechs travel further
+  -- sami's infantry, mechs, and apc travels further
   co.units[1].travel += 1
   co.units[2].travel += 1
+  co.units[4].travel += 1
 
   -- sami's infantry and mechs have a +5 to their capture rate
   co.units[1].capture_bonus += 5
