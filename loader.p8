@@ -360,7 +360,12 @@ function draw_victory_defeat_menu()
   if match_meta_level_index == 0 then
     -- campaign level victory. 
     if match_result_reason == 0 then
+      local speed = calculate_speed(1,1)
+      local technique = calculate_technique(1,1)
       print_outlined("!!!victory!!!", 38, 8, 3, 11) 
+      print_outlined("speed: ", 38, 16, 3, 11) 
+      print_outlined("technique: ", 38, 24, 3, 11) 
+      print_outlined("total rank: ", 38, 32, 3, 11) 
     else
       print_outlined("defeat", 53, 60, 9, 8)
     end
@@ -1330,6 +1335,11 @@ end
 
 function calculate_technique(units_built, units_lost)
   return min(100, 100 * (units_built - units_lost / 2) / units_built)
+end
+
+function to_rank(score)
+  rank_mapping = {'s','a','b','c','d','f'}
+  return rank_mapping[min(6, 11 - ceil(score/10))]
 end
 
 
