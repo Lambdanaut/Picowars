@@ -180,7 +180,7 @@ end
 function _draw()
   if menu_index == 1 or menu_index == 2 then
       -- splash screen
-      rectfill(0, 0, 128, 128, 0)  --bg
+      cls()
 
       rectfill(0, 0, 16, 128, 9) --left and right bars
       rectfill(112, 0, 128, 128, 9)
@@ -277,7 +277,6 @@ function update_verses_menu()
     menu_index = 1
   end
 
-
   map_index_selected = map_index_selected % 6
   ai_index_selected = ai_index_selected % 3
   vs_mode_option_selected = vs_mode_option_selected % 2
@@ -355,6 +354,20 @@ function draw_campaign()
 end
 
 function draw_victory_defeat_menu()
+  cls(7)
+
+
+  if match_meta_level_index == 0 then
+    -- campaign level victory. 
+    if match_result_reason == 0 then
+      print_outlined("!!!victory!!!", 38, 8, 3, 11) 
+    else
+      print_outlined("defeat", 53, 60, 9, 8)
+    end
+  else
+    -- not campaign mission. 
+  end
+
 end
 
 function start_map()
@@ -1309,6 +1322,14 @@ function fadeout()
       start_map()
     end
   end
+end
+
+function calculate_speed(turns_completed, min_perfect_turns)
+  return min(100, 100 + min_perfect_turns - turns_completed)
+end
+
+function calculate_technique(units_built, units_lost)
+  return min(100, 100 * (units_built - units_lost / 2) / units_built)
 end
 
 
