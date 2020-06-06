@@ -4,28 +4,10 @@ __lua__
 
 debug = true
 
-palette_orange = "orange star★"
-palette_blue = "blue moon●"
-palette_green = "green earth🅾️"
-palette_pink = "pink quasar░"
+palette_orange, palette_blue, palette_green, palette_pink = "orange star★", "blue moon●", "green earth🅾️", "pink quasar░"
+team_index_to_palette = {palette_orange, palette_blue, palette_green, palette_pink}
 
-team_index_to_palette = {
-  palette_orange,
-  palette_blue,
-  palette_green,
-  palette_pink
-}
-
-team_icon = {}
-
-dead_str = 'dead'
-
-last_checked_time = 0
-delta_time = 0
-unit_id_i = 0
-attack_timer = 0
-end_turn_timer = 0
-memory_i = 0x4300
+last_checked_time, delta_time, unit_id_i, attack_timer, end_turn_timer, memory_i, dead_str, team_icon = 0, 0, 0, 0, 0, 0x4300, 'dead', {}
 
 
 function _init()
@@ -396,7 +378,7 @@ function ai_coroutine()
   end
 
   if not debug then
-    for i=1,45 do
+    for i=1,35 do
       yield()
     end
   end
@@ -1405,10 +1387,7 @@ function make_structure(struct_type, p, team)
   -- 1: hq
   -- 2: city
   -- 3: base
-  struct.type = struct_type
-  struct.p = p
-  struct.team = team
-  struct.capture_left = 20
+  struct.type, struct.p, struct.team, struct.capture_left = struct_type, p, team, 20
 
   -- set structure sprite based on the structure type
   local struct_sprite
@@ -2089,11 +2068,11 @@ function get_tile_info(tile)
   end
   if fget(tile, 0) then
     if fget(tile, 1) then return {"road", 1.0}
-    elseif fget(tile, 6) then return {"plain★", 0.8}
+    elseif fget(tile, 2) then return {"river", 1.0}
     elseif fget(tile, 3) then return {"wood★★", 0.6}
     elseif fget(tile, 4) then return {"mntn★★★★", 0.25}
-    elseif fget(tile, 2) then return {"river", 1.0}
     elseif fget(tile, 5) then return {"cliff", 1.0}
+    elseif fget(tile, 6) then return {"plain★", 0.8}
     end
   end
   return {"unmovable", 0} -- no info
