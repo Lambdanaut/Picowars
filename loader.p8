@@ -18,15 +18,8 @@ mobility_mech = 1
 mobility_tires = 2
 mobility_treads = 3
 
-unit_infantry = "infantry"
-unit_mech = "mech"
-unit_recon = "recon"
-unit_apc = "apc"
-unit_artillery = "artillery"
-unit_tank = "tank"
-unit_rocket = "rocket"
-unit_war_tank = "war tank"
-
+unit_infantry, unit_mech, unit_recon, unit_apc, unit_artillery, unit_tank, unit_rocket, unit_war_tank = "infantry", "mech", "recon", "apc", "artillery", "tank", "rocket", "war tank"
+  
 unit_index_infantry = 1
 unit_index_mech = 2
 unit_index_recon = 3
@@ -141,9 +134,10 @@ function _init()
   read_match_meta()
   clear_match_meta()  -- reset match meta memory bits
 
-  match_meta_coming_from_match = true
-
   if match_meta_coming_from_match then
+    if match_meta_is_campaign_mission then
+      init_campaign()
+    end
     menu_index = 4  -- victory/defeat screen
   end
 
@@ -264,13 +258,17 @@ function update_verses_menu()
   if btnp4 then 
     -- start vs match
     sfx(1)
+
     fadeout()
     local players_human = {true}
     current_map = vs_map_index_mapping[map_index_selected+1]
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
+    team1 = 1
+    team2 = 2
 
     write_assets(current_map, {make_alecia(), make_alecia()}, players_human)
+    write_match_meta(0, team1, team2)
   elseif btnp5 then
     -- back to main menu
     sfx(1)
@@ -294,12 +292,16 @@ function update_victory_defeat_menu()
   if btnp4 then 
     sfx(1)
 
-    if match_meta_level_index > 0 and match_result_reason == 1 then
-      -- campaign level victory. increment campaign counter, save game, and continue to next mission.
-      campaign_level_index += 1
-      init_campaign()
-      write_save()
-      menu_index = 3
+    if match_meta_is_campaign_mission then
+      if match_result_reason == 1 then
+        -- campaign level victory. increment campaign counter, save game, and continue to next mission.
+        campaign_level_index += 1
+        init_campaign()
+        write_save()
+        menu_index = 3
+      else
+        menu_index = 1
+      end
     else
       -- not campaign mission. return to main menu
       menu_index = 1
@@ -345,6 +347,9 @@ function draw_campaign()
     -- write the map, commander and unit data to memory
     write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
 
+    -- write match meta to memory
+    write_match_meta(current_level.index, current_level.co_p1.team_index, current_level.co_p2.team_index)
+
     fadeout()
 
   elseif active_dialogue_coroutine then
@@ -356,11 +361,10 @@ end
 function draw_victory_defeat_menu()
   cls(7)
 
-
-  if match_meta_level_index == 0 then
-    -- campaign level victory. 
-    if match_result_reason == 0 then
-      local speed = calculate_speed(match_result_turn_count, 1)
+  if match_meta_is_campaign_mission then
+    -- campaign level. 
+    if match_result_reason == 1 then
+      local speed = calculate_speed(match_result_turn_count, current_level.perfect_turns)
       local technique = calculate_technique(match_result_units_built[1], match_result_units_lost[1])
       local score = (speed + technique) / 2
       print_outlined("!!!victory!!!", 38, 8, 3, 11) 
@@ -371,7 +375,12 @@ function draw_victory_defeat_menu()
       print_outlined("defeat", 53, 60, 9, 8)
     end
   else
-    -- not campaign mission. 
+    -- not campaign level. 
+    if match_result_reason == 1 then
+      print_outlined("!!!victory!!!", 38, 8, 3, 11) 
+    else
+      print_outlined("defeat", 53, 60, 9, 8)
+    end
   end
 
 end
@@ -1079,6 +1088,7 @@ function level_1()
   l.map_pos = {35, 30}
   l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
+  l.perfect_turns = 25
 
   l.dialogue = {
     {co_bill, "ah, orange star's capital. ripe for the pickin!"},
@@ -1240,17 +1250,18 @@ function read_save()
 end
 
 function read_match_meta()
-  memory_i = 0x5ddc
+  memory_i = 0x5dc0
 
   match_meta_coming_from_match = peek_increment() == 1
   match_meta_level_index = peek_increment()
+  match_meta_is_campaign_mission = match_meta_level_index > 0
   match_meta_p1_team_index = peek_increment()
   match_meta_p2_team_index = peek_increment()
 end
 
 function write_match_meta(level_index, p1_team_index, p2_team_index)
   -- writes metadata about a match to be read by loader after the match
-  memory_i = 0x5ddc
+  memory_i = 0x5dc0
 
   poke_increment(1)  -- bool to indicate we're entering a match
   poke_increment(level_index)
@@ -1263,8 +1274,8 @@ function clear_match_meta()
   memory_i = 0x5ddc
 
   while memory_i < 0x5ddd do
-    memory_i += 1
     poke_increment(0)
+    memory_i += 1
   end
 end
 
