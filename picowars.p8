@@ -20,8 +20,8 @@ team_icon = {}
 
 dead_str = 'dead'
 
-last_checked_time = 0.0
-delta_time = 0.0
+last_checked_time = 0
+delta_time = 0
 unit_id_i = 0
 attack_timer = 0
 end_turn_timer = 0
@@ -396,7 +396,7 @@ function ai_coroutine()
   end
 
   if not debug then
-    for i=1,25 do
+    for i=1,45 do
       yield()
     end
   end
@@ -713,6 +713,7 @@ function selector_init()
   add(selector_prompt_texts[2], "load")
   add(selector_prompt_texts[2], "unload")
   selector_prompt_texts[4] = {}
+  add(selector_prompt_texts[4], "cancel")
   add(selector_prompt_texts[4], "end turn")
   selector_prompt_texts[8] = {{}, {}}  -- unit construction prompt texts filled in programmatically
 
@@ -798,7 +799,9 @@ function selector_update()
         -- do menu selection prompt (end turn)
 
         selector_stop_selecting()
-        end_turn()
+        if selector_prompt_selected == 2 then
+          end_turn()
+        end
       elseif selector_selection_type == 8 then
         -- do build unit at base/factory
 
@@ -823,8 +826,8 @@ function selector_update()
 
       selector_stop_selecting()
 
-    elseif selector_selection_type == 2 or selector_selection_type == 8 then
-      -- do unit selection and base construction prompt
+    elseif selector_selection_type == 2 or selector_selection_type == 4 or selector_selection_type == 8 then
+      -- do rest, unit selection and base construction prompt
       selector_update_prompt(arrow_val)
     elseif selector_selection_type == 3 then
       -- attack selection
@@ -1084,7 +1087,7 @@ end
 function selector_start_menu_prompt()
   selector_selection_type = 4
 
-  selector_prompt_options = {1}  -- end turn in options by default
+  selector_prompt_options = {1,2}  -- end turn in options by default
   selector_prompt_selected = 1
 
   sfx(6)
@@ -1132,7 +1135,7 @@ function selector_draw_prompt()
     end
     if i == selector_prompt_selected then 
       bg_color = 14
-      prompt_text = prompt_text .. "!"
+      prompt_text ..= "!"
     end
 
     draw_msg({selector_p[1], selector_p[2] - y_offset}, prompt_text, bg_color, bg_color == 14)
@@ -1851,7 +1854,7 @@ function load_string(n)
   local str = ""
   for i = 1, n do
     local charcode_val = chr(peek_increment())
-    str = str .. charcode_val
+    str ..= charcode_val
   end
   -- i don't know what this returns, but it's not a string. that's fine. it works. 
   return str
@@ -2102,7 +2105,7 @@ prioqueue = {}
 prioqueue.__index = prioqueue
 
 function prioqueue.new()
-  local newqueue = {}
+  newqueue = {}
   setmetatable(newqueue, prioqueue)
 
   newqueue.values = {}
@@ -2124,9 +2127,9 @@ local function siftup(queue, index)
 end
 
 local function siftdown(queue, index)
-  local lcindex, rcindex, minindex
-  lcindex = index*2
-  rcindex = index*2+1
+  local minindex
+  local lcindex = index*2
+  local rcindex = index*2+1
   if rcindex > #queue.values then
     if lcindex > #queue.values then
       return
