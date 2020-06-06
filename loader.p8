@@ -555,7 +555,6 @@ function write_co(co, human_player, team_index)
   poke_increment(human_player)
   write_string(co.name, 10)
   poke_increment(team_index)
-  printh(co.team_icon)
   poke_increment(co.sprite)
   poke_increment(co.team_icon)
   poke_increment(co.music)
@@ -582,9 +581,6 @@ function write_map(m)
   end
 
 end
-
-
-
 
 
 __gfx__

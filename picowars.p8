@@ -78,6 +78,7 @@ function _update()
       current_map = make_war_map(map_index_mapping[map_index_selected+1][1])
       map_bg_color = map_index_mapping[map_index_selected+1][2]
       players_human[2] = ai_index_selected == 1
+      players_human[1] = not (btnp(1) and btnp(2))
 
       current_map:load()
       make_cam()
@@ -1812,7 +1813,6 @@ function load_assets()
     players_co_name[i] = load_string(10)
     players[i] = team_index_to_palette[peek_increment()]
     players_co_icon[i] = peek_increment()
-    printh(players_co_icon[i])
     team_icon[i] = peek_increment()
     players_music[i] = peek_increment()
 
@@ -1997,7 +1997,6 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
       2)
   end
 
- 
   print(msg, x_pos, y_pos - 1, 0)
 end
 
