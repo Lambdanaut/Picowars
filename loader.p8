@@ -112,11 +112,6 @@ function _init()
     write_co(game_commanders[i], team_humans[i], team_indexes[i])
   end
   write_map(make_map4())
-
-  -- load save
-  write_save()
-  read_save()
-
 end
 
 function _update()
@@ -210,26 +205,6 @@ function make_commanders()
   }
 end
 
-function make_andrew()
-  local co = {}
-
-  co.name = "andrew"
-  co.sprite = 230
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = true
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- andrew's units get 1 more healing from structures
-  for unit in all(co.units) do
-    unit.struct_heal_bonus = 1
-  end
-
-  return co
-end
-
 function make_sami()
   local co = {}
 
@@ -242,68 +217,6 @@ function make_sami()
 
   co.units = make_units()
 
-  -- sami's infantry and mechs travel further
-  -- co.units[1].travel += 1
-  -- co.units[2].travel += 1
-
-  -- -- sami's infantry and mechs have a +5 to their capture rate
-  -- co.units[1].capture_bonus += 5
-  -- co.units[2].capture_bonus += 5
-
-  -- -- sami's infantry and mechs have 30% more attack
-  -- for i in all({unit_index_infantry, unit_index_mech}) do
-  --   for j=1,#co.units[i].damage_chart do
-  --     co.units[i].damage_chart[j] *= 1.3
-  --   end
-  -- end
-
-  -- -- sami's non-infantry units have 10% less attack
-  -- for i=3,#co.units do
-  --   for j=1,#co.units[i].damage_chart do
-  --     co.units[i].damage_chart[j] *= 0.9
-  --   end
-  -- end
-
-  return co
-end
-
-function make_hachi()
-  local co = {}
-
-  co.name = "hachi"
-  co.sprite = 198
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- hachi's non-infantry and non-mech units cost 15% less
-  for i=3, #co.units do
-    co.units[i].cost = flr(co.units[i].cost * 0.85)
-  end
-
-  return co
-end
-
-function make_bill()
-  local co = {}
-
-  co.name = "bill"
-  co.sprite = 236
-  co.team_index = 2  -- blue moon
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- bill's non-infantry units have 10% more luck
-  for i=1,#co.units do
-    co.units[i].luck_max = 2
-  end
-
   return co
 end
 
@@ -313,88 +226,6 @@ function make_alecia()
   co.name = "alecia"
   co.sprite = 206
   co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  return co
-end
-
-function make_conrad()
-  local co = {}
-
-  co.name = "conrad"
-  co.sprite = 200
-  co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  for unit in all(co.units) do
-    -- conrads's units are only healed by 1 by structures
-    unit.struct_heal_bonus = -1
-
-    -- all of conrads units have 10% more firepower
-    for i=1, #unit.damage_chart do
-      unit.damage_chart[i] *= 1.1
-    end
-  end
-
-  return co
-end
-
-function make_guster()
-  local co = {}
-
-  co.name = "guster"
-  co.sprite = 234
-  co.team_index = 3  -- green earth
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- guster's ranged units have +1 range
-  co.units[4].range_max += 1
-  co.units[6].range_max += 1
-
-  -- guster's ranged units have 30% more attack
-  for i in all({unit_index_artillery, unit_index_rocket}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
-
-  -- guster's non-ranged, non-infantry units have 10% less attack
-  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
-
-  -- guster's ai prioritizes ranged units
-  co.units[unit_index_infantry].ai_unit_ratio = 10
-  co.units[unit_index_mech].ai_unit_ratio = 5
-  co.units[unit_index_recon].ai_unit_ratio = 5
-  co.units[unit_index_artillery].ai_unit_ratio = 32
-  co.units[unit_index_tank].ai_unit_ratio = 5
-  co.units[unit_index_rocket].ai_unit_ratio = 32
-  co.units[unit_index_war_tank].ai_unit_ratio = 5
-
-  return co
-end
-
-function make_slydy()
-  local co = {}
-
-  co.name = "slydy"
-  co.sprite = 232
-  co.team_index = 4  -- pink groove
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
@@ -651,217 +482,11 @@ end
 -- commanders
 function make_commanders()
   commanders = {
-    make_dan(),
     make_sami(),
-    make_hachi(),
-    make_bill(),
-    make_guster(),
-    make_slydy(),
+    make_alecia(),
   }
 end
 
-function make_dan()
-  local co = {}
-
-  co.name = "dan"
-  co.sprite = p_dan
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = true
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- dan's units get 1 more healing from structures
-  for unit in all(co.units) do
-    unit.struct_heal_bonus = 1
-  end
-
-  return co
-end
-co_dan = make_dan()
-
-function make_sami()
-  local co = {}
-
-  co.name = "sami"
-  co.sprite = p_sami
-  co.team_index = 1  -- orange star
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- sami's infantry, mechs, and apc travels further
-  co.units[1].travel += 1
-  co.units[2].travel += 1
-  co.units[4].travel += 1
-
-  -- sami's infantry and mechs have a +5 to their capture rate
-  co.units[1].capture_bonus += 5
-  co.units[2].capture_bonus += 5
-
-  -- sami's infantry and mechs have 30% more attack
-  for i in all({unit_index_infantry, unit_index_mech}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
-
-  -- sami's non-infantry units have 10% less attack
-  for i=3,#co.units do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
-
-  return co
-end
-co_sami = make_sami()
-
-function make_hachi()
-  local co = {}
-
-  co.name = "hachi"
-  co.sprite = p_hachi
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- hachi's non-infantry and non-mech units cost 15% less
-  for i=3, #co.units do
-    co.units[i].cost = flr(co.units[i].cost * 0.85)
-  end
-
-  return co
-end
-co_hachi = make_hachi()
-
-function make_bill()
-  local co = {}
-
-  co.name = "bill"
-  co.sprite = p_bill
-  co.team_index = 2  -- blue moon
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- bill's non-infantry units have 10% more luck
-  for i=1,#co.units do
-    co.units[i].luck_max = 2
-  end
-
-  return co
-end
-co_bill = make_bill()
-
-function make_alecia()
-  local co = {}
-
-  co.name = "alecia"
-  co.sprite = p_alecia
-  co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  return co
-end
-co_alecia = make_alecia()
-
-function make_conrad()
-  local co = {}
-
-  co.name = "conrad"
-  co.sprite = p_conrad
-  co.team_index = 2
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  for unit in all(co.units) do
-    -- conrads's units are only healed by 1 by structures
-    unit.struct_heal_bonus = -1
-
-    -- all of conrads units have 10% more firepower
-    for i=1, #unit.damage_chart do
-      unit.damage_chart[i] *= 1.1
-    end
-  end
-
-  return co
-end
-co_conrad = make_conrad()
-
-function make_guster()
-  local co = {}
-
-  co.name = "guster"
-  co.sprite = p_guster
-  co.team_index = 3  -- green earth
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- guster's ranged units have +1 range
-  co.units[4].range_max += 1
-  co.units[6].range_max += 1
-
-  -- guster's ranged units have 30% more attack
-  for i in all({unit_index_artillery, unit_index_rocket}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 1.3
-    end
-  end
-
-  -- guster's non-ranged, non-infantry units have 10% less attack
-  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
-    for j=1,#co.units[i].damage_chart do
-      co.units[i].damage_chart[j] *= 0.9
-    end
-  end
-
-  -- guster's ai prioritizes ranged units
-  co.units[unit_index_infantry].ai_unit_ratio = 7
-  co.units[unit_index_mech].ai_unit_ratio = 5
-  co.units[unit_index_recon].ai_unit_ratio = 5
-  co.units[unit_index_artillery].ai_unit_ratio = 37
-  co.units[unit_index_tank].ai_unit_ratio = 5
-  co.units[unit_index_rocket].ai_unit_ratio = 36
-  co.units[unit_index_war_tank].ai_unit_ratio = 5
-
-  return co
-end
-co_guster = make_guster()
-
-function make_slydy()
-  local co = {}
-
-  co.name = "slydy"
-  co.sprite = p_slydy
-  co.team_index = 4  -- pink quasar
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  return co
-end
-co_slydy = make_slydy()
 
 -- memory read/write functions
 function write_string(string, length)
@@ -915,7 +540,6 @@ function write_unit(u)
   poke_increment(u.ai_unit_ratio)
   poke_increment(u.moveout_sfx)
   poke_increment(u.combat_sfx)
-  if u.is_carrier then poke_increment(1) else poke_increment(0) end
 
   -- damage chart
   for attacked_unit_index, damage_val in pairs(u.damage_chart) do
@@ -931,6 +555,7 @@ function write_co(co, human_player, team_index)
   poke_increment(human_player)
   write_string(co.name, 10)
   poke_increment(team_index)
+  printh(co.team_icon)
   poke_increment(co.sprite)
   poke_increment(co.team_icon)
   poke_increment(co.music)
@@ -957,62 +582,6 @@ function write_map(m)
   end
 
 end
-
-function write_save()
-  memory_i = 0x5e00
-
-  -- write funds to disk
-  poke_increment(funds)
-
-  -- write campaign score and progress to disk
-
-
-  -- write available commanders to disk
-  for co in all(commanders) do
-    local available = 0
-    if co.available then available = 1 end
-    poke_increment(available)
-  end
-
-  -- write available war maps to disk
-
-end
-
-function read_save()
-  memory_i = 0x5e00
-
-  -- read funds from disk
-  funds = peek_increment()
-
-  -- write campaign score and progress to disk
-
-
-  -- write available commanders to disk
-  for co in all(commanders) do
-    local available = peek_increment()
-    if available == 1 then co.available = true end
-  end
-
-  -- write available war maps to disk
-end
-
-function read_match_result()
-  -- reads a match's results from memory and sets global variables for each of them
-
-  memory_i = 0x5ddd -- beginning of match result memory
-
-  -- reasons:
-  -- * 1: victory player 1
-  -- * 2: victory player 2
-  -- * 3: abandon mission
-  match_result_reason = peek_increment()
-  for i = 1, 2 do
-    match_result_units_lost[i] = peek_increment()
-    match_result_units_built[i] = peek_increment()
-  end
-  match_result_turn_count = peek_increment()
-end
-
 
 
 
