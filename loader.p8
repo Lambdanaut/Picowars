@@ -296,9 +296,18 @@ function update_victory_defeat_menu()
       if match_result_reason == 1 then
         -- campaign level victory. increment campaign counter, save game, and continue to next mission.
         campaign_level_index += 1
-        init_campaign()
-        write_save()
-        menu_index = 3
+
+        if campaign_level_index <= #campaign_levels then
+          -- start next campaign mission
+          init_campaign()
+          write_save()
+          menu_index = 3
+        else
+          -- final level
+          -- do endgame credits
+          campaign_level_index -= 1
+          menu_index = 1
+        end
       else
         menu_index = 1
       end
@@ -1271,7 +1280,7 @@ end
 
 function clear_match_meta()
   -- clears match metadata. run on loader startup
-  memory_i = 0x5ddc
+  memory_i = 0x5dc0
 
   while memory_i < 0x5ddd do
     poke_increment(0)
