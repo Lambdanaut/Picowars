@@ -8,19 +8,12 @@ __lua__
 -- thanks to nintendo for making advance wars
 -- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
 
-
-debug = false
-
 palette_orange = "orange star★"
 palette_blue = "blue moon●"
-palette_green = "green earth🅾️"
-palette_pink = "pink groove♥"
 
 team_index_to_palette = {
   palette_orange,
-  palette_blue,
-  palette_green,
-  palette_pink
+  palette_blue
 }
 
 team_icon = {}
@@ -451,6 +444,10 @@ function ai_coroutine()
     end
   end
 
+  for i=1,35 do
+    yield()
+  end
+
   end_turn()
 
 end
@@ -642,7 +639,7 @@ attack_coroutine = function()
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
   attack_coroutine_u2.hp = max(0, attack_coroutine_u2.hp - damage_done)
   sfx(attack_coroutine_u1.combat_sfx)
-  while attack_timer < 1.25 and not debug do
+  while attack_timer < 1.4 do
     print("-" .. damage_done, attack_coroutine_u2.p[1], attack_coroutine_u2.p[2] - 4 - attack_timer * 8, 8)
     yield()
   end
@@ -653,7 +650,7 @@ attack_coroutine = function()
     damage_done = attack_coroutine_u2:calculate_damage(attack_coroutine_u1)
     attack_coroutine_u1.hp = max(0, attack_coroutine_u1.hp - damage_done)
     sfx(attack_coroutine_u2.combat_sfx)
-    while attack_timer < 1.25 and not debug do
+    while attack_timer < 1.4 do
       print("-" .. damage_done, attack_coroutine_u1.p[1], attack_coroutine_u1.p[2] - 4 - attack_timer * 8, 8)
       yield()
     end
@@ -672,7 +669,7 @@ attack_coroutine = function()
     attack_coroutine_u2:kill()
   end
 
-  if explode_at and not debug then
+  if explode_at then
     attack_timer = 0
     while attack_timer < 1.5 do
       spr(71 + flr(attack_timer*6), explode_at[1], explode_at[2] - 3 - attack_timer * 10)
@@ -693,7 +690,7 @@ end_turn_coroutine = function()
 
   local played_music = false
 
-  while end_turn_timer < 1.6 and not debug do
+  while end_turn_timer < 1.6 do
     set_palette(players_turn_team)
     rectfill(cam.p[1], cam.p[2] + 51, cam.p[1] + 128, cam.p[2] + 76, 9)
     line(cam.p[1], cam.p[2] + 77, cam.p[1] + 128, cam.p[2] + 77, 8)
@@ -1640,13 +1637,8 @@ function make_unit(unit_type_index, p, team)
         x_change = -1
       end
 
-      if debug then
-        self.p[1] += x_change*8
-        self.p[2] += y_change*8
-      else
-        self.p[1] += x_change
-        self.p[2] += y_change
-      end
+      self.p[1] += x_change
+      self.p[2] += y_change
 
     else
      
@@ -1895,14 +1887,6 @@ function set_palette(palette)
     pal(9, 6)
     pal(8, 12)
     pal(2, 5)  
-  elseif palette == palette_green then
-    pal(9, 11)
-    pal(8, 3)
-    pal(2, 10)  
-  elseif palette == palette_pink then
-    pal(9, 14)
-    pal(8, 2)
-    pal(2, 10)
   elseif palette == 5 then
     pal(9, 13)
     pal(8, 6)
