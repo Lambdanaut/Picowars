@@ -64,7 +64,7 @@ p_jethro = 194
 
 -- music
 team_index_to_music = {
-  31, 0, 0, 0
+  31, 0, 44, 15
 }
 
 -- team icons
