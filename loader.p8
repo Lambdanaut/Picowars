@@ -713,7 +713,7 @@ function make_apc()
   unit.type = unit_apc
   unit.sprite = 23
   unit.mobility_type = mobility_treads
-  unit.travel = 10
+  unit.travel = 11
   unit.cost = 5
   unit.range_min = 0
   unit.range_max = 0
