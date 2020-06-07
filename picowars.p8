@@ -229,8 +229,7 @@ function ai_coroutine()
           end
 
           -- determine best fight to take
-          local best_fight_u
-          local best_fight_pos
+          local best_fight_u, best_fight_pos
           local best_fight_value = -32767  -- start at negative infinity
 
           for t, attackable_unit in pairs(attackables) do
@@ -348,10 +347,7 @@ function ai_coroutine()
 
       -- get unit counts
       -- add 1 to counts to stop division by 0 errors
-      local infantry_count = 1
-      local mech_count = 1
-      local total_unit_count = 1
-      local unit_counts = {0, 0, 0, 0, 0, 0, 0, 0}
+      local infantry_count, mech_count, total_unit_count, unit_counts = 1, 1, 1, {0, 0, 0, 0, 0, 0, 0, 0}
 
       for u in all(units) do
         if u.team == players_turn_team then
@@ -657,15 +653,13 @@ function make_cam()
 
   cam.update = function (self) 
     -- move camera with the selector
-    local shake_x = 0
-    local shake_y = 0
+    local shake_x, shake_y = 0, 0
     if explode_at and attack_timer < 1 then
       shake_x = rnd((1 - attack_timer) * 9) - 1
       shake_y = rnd((1 - attack_timer) * 9) - 1
     end
 
-    local move_x = (selector_p[1] - 64 - self.p[1]) / 15
-    local move_y = (selector_p[2] - 64 - self.p[2]) / 15
+    local move_x, move_y = (selector_p[1] - 64 - self.p[1]) / 15, (selector_p[2] - 64 - self.p[2]) / 15
 
     self.p[1] += move_x
     self.p[2] += move_y
@@ -967,10 +961,7 @@ function selector_draw()
   local tile_info = get_tile_info(tile)
   local struct_type = tile_info[3] 
   set_palette(players_turn_team)
-  local x_corner = cam.p[1]
-  local y_corner = cam.p[2]
-  local gold = players_gold[players_turn]
-  local team_name = players_turn_team
+  local x_corner, y_corner, gold, team_name = cam.p[1], cam.p[2], players_gold[players_turn], players_turn_team
   if last_checked_time % 4 < 2 then team_name = players_co_name[players_turn] end
   if gold < 10 then gold = "0" .. gold end
   rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
@@ -1108,9 +1099,8 @@ function selector_start_unload_selection()
 end
 
 function selector_draw_prompt()
-  local y_offset = 15
+  local y_offset, prompt_text = 15
   if selector_selection_type == 8 then y_offset = -25 end
-  local prompt_text
   for i, prompt in pairs(selector_prompt_options) do
     local bg_color = 6
     prompt_text = selector_prompt_texts[selector_selection_type][prompt]
@@ -1179,8 +1169,7 @@ function selector_move()
 end
 
 function selector_get_move_input()
-  local x_change
-  local y_change
+  local x_change, y_change
   if btn(0) then x_change = -8 end
   if btn(1) then x_change = 8 end
   if btn(2) then y_change = -8 end
@@ -1229,29 +1218,12 @@ function selector_draw_movement_arrow()
   -- draws a movement arrow during unit selection
   -- directions = n: 0, s: 1, e: 2, w: 3
   local last_p = selector_arrowed_tiles[1]
-  local last_p_direction
-  local next_p
-  local next_p_direction
-  local current_p
-  local opposite_directions
-  local sprite
-  local flip_x
-  local flip_y
-  local flip_horizontal = false
+  local last_p_direction, next_p, next_p_direction, current_p, opposite_directions, sprite, flip_x, flip_y
 
-  local arrowhead = 90
-  local arrowhead_l = 91
-  local vertical = 89
-  local horizontal = 106
-  local curve_w_n = 123
-  local curve_n_e = 121
-  local curve_n_w = 105
+  local arrowhead, arrowhead_l, vertical, horizontal, curve_w_n, curve_n_e, curve_n_w, flip_horizontal = 90, 91, 89, 106, 123, 121, 105
 
   for i = 2, #selector_arrowed_tiles do
-    sprite = nil
-    next_p = nil
-    flip_x = false
-    flip_y = false
+    flip_x, flip_y, sprite, next_p = nil
 
     current_p = selector_arrowed_tiles[i]
     if last_p[2] < current_p[2] then last_p_direction = 0 
@@ -1346,10 +1318,7 @@ function make_war_map(r)
 
   war_map.draw = function(self)
     -- fill background in with patterns
-    local x = self.r[1]*8
-    local y = self.r[2]*8
-    local w = self.r[3]*8
-    local h = self.r[4]*8
+    local x, y, w, h = self.r[1]*8, self.r[2]*8, self.r[3]*8, self.r[4]*8
     fill_color = bor(0b00010000, map_bg_color)
     fillp(0b1111011111111101)
     rectfill(x-38, y-38, x+w+45, y+h+45, fill_color)
@@ -1504,11 +1473,9 @@ function make_unit(unit_type_index, p, team)
     -- the first table has all of the tiles this unit can move to. this is the only one the ai wants.
     -- the second table is the rest of the tiles they could move to if their own units weren't occupying them. 
 
-    local current_tile
     local tiles_to_explore = {{self.p, self.travel}}  -- store the {point, travel leftover}
-    local movable_tiles = {}
-    local tiles_with_our_units = {}
-    local explore_i = 0  -- index in tiles_to_explore of what we've explored so far
+    -- explore_i: index in tiles_to_explore of what we've explored so far
+    local movable_tiles, tiles_with_our_units, explore_i, current_tile = {}, {}, 0
 
     while #tiles_to_explore > explore_i do
       explore_i += 1
