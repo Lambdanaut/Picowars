@@ -396,9 +396,6 @@ function ai_move(u, p)
   end
 end
 
-function ai_capture(u)
-end
-
 function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
   -- draw marker on unit we're pathfinding for
   local tiles_to_explore = {}
