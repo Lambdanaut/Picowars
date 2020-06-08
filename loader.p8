@@ -34,6 +34,7 @@ unit_index_war_tank = 8
 sfx_option_change = 0
 sfx_splash_screen_start = 1
 sfx_dialogue_char = 2
+sfx_campaign_victory = 3
 
 sfx_infantry_moveout = 14
 sfx_tank_moveout = 15
@@ -71,6 +72,8 @@ team_index_to_music = {
 team_index_to_team_icon = {
   192, 208, 193, 209
 }
+
+team_index_to_team_name = {"orange star★", "blue moon●", "green earth🅾️", "pink quasar░"}
 
 -- ai unit ratios
 -- must add up to 100
@@ -136,6 +139,7 @@ function _init()
 
   if match_meta_coming_from_match then
     if match_meta_is_campaign_mission then
+      if match_result_reason == 1 then sfx(sfx_campaign_victory) end
       init_campaign()
     end
     menu_index = 4  -- victory/defeat screen
@@ -182,16 +186,16 @@ function _draw()
       spr(32, 33, 19, 8, 2) --logo
       print("version " .. version, 44, 30, 9)
 
-      local sprite_orange_star = 192
+      local sprite_blue_moon = 208
       local sprite_green_earth = 193
       local sprite_pink_quasar = 209
 
-      if campaign_level_index < 2 then sprite_orange_star = 224 end
+      if campaign_level_index < 2 then sprite_blue_moon = 224 end
       if campaign_level_index < 2 then sprite_green_earth = 224 end
       if campaign_level_index < 2 then sprite_pink_quasar = 224 end
 
-      spr(208, 47, 38)
-      spr(sprite_orange_star, 56, 38)
+      spr(192, 47, 38)
+      spr(sprite_blue_moon, 56, 38)
       spr(sprite_green_earth, 65, 38)
       spr(sprite_pink_quasar, 74, 38)
 
@@ -376,20 +380,26 @@ function draw_victory_defeat_menu()
       local speed = calculate_speed(match_result_turn_count, current_level.perfect_turns)
       local technique = calculate_technique(match_result_units_built[1], match_result_units_lost[1])
       local score = (speed + technique) / 2
-      print_outlined("!!!victory!!!", 38, 8, 3, 11) 
-      print_outlined("speed:" .. to_rank(speed), 38, 16, 3, 11) 
-      print_outlined("technique:" .. to_rank(technique), 38, 24, 3, 11) 
-      print_outlined("total rank:" .. to_rank(score), 38, 32, 3, 11) 
+      print_double("!!!victory!!!", 38, 8, 3, 11) 
+      line(10, 15, 118, 15, 3)
+      rectfill(10, 16, 118, 50, 6)
+      print_double("speed: " .. to_rank(speed), 38, 22, 3, 11) 
+      print_double("technique: " .. to_rank(technique), 38, 30, 3, 11) 
+      print_double("total rank: " .. to_rank(score), 38, 38, 3, 11) 
     else
-      print_outlined("defeat", 53, 60, 9, 8)
+      print_double("defeat", 53, 60, 9, 8)
     end
   else
     -- not campaign level. 
-    if match_result_reason == 1 then
-      print_outlined("!!!victory!!!", 38, 8, 3, 11) 
-    else
-      print_outlined("defeat", 53, 60, 9, 8)
+    local victor = match_meta_p1_team_index
+    if match_result_reason == 2 then
+      victor = match_meta_p2_team_index
     end
+    print_double("victory for " .. team_index_to_team_name[victor], 10, 8, 3, 11) 
+  end
+
+  if last_checked_time % 2 > 1 then
+    print_double("press ❎ or 🅾️ to continue", 13, 85, 10, 11) 
   end
 
 end
@@ -481,7 +491,9 @@ function draw_dialogue(string, length, co_x_offset)
   local strings = split_str(string, length)
   local str_i = 102
   for str in all(strings) do
-    print(str, 22, str_i, 0)
+    set_palette(current_dialogue[1].team_index)
+    print_double(str, 22, str_i, 0, 8)
+    pal()
     str_i += 8
   end
 end
@@ -1329,6 +1341,14 @@ function print_outlined(str, x, y, col, outline_col)
   print(str, x, y, col)
 end
 
+function print_double(str, x, y, col, double_color)
+  for a=x-1,x+1 do
+    for b=y-1,y+1 do
+      print(str,a,b,double_color)
+    end
+  end
+  print(str, x, y, col)
+end
 
 function fadeout()
   -- by dw817 
@@ -1531,9 +1551,9 @@ __map__
 000000000d0000000000000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 0002000013550215502d5503a5503f5503f5503d5503750032500335002e500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
-000300002865025650216401e6401664011640096300063000630006300003020600266001e600006001260009600066000060000600006000060000600006000060000600006000060000600006000060000600
+000300002865025650216401e6401664011640096300063000630006300000020600266001e600006001260009600066000060000600006000060000600006000060000600006000060000600006000060000600
 000100001905032050240500d05003050070500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+010a00001b340243402934030340333403734037340333402e3402b3402b3402b3402b3402e3402e340303403034033340333403334033340333403334033340393003d300343002a30024300253002e30031300
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
