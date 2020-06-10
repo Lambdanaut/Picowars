@@ -145,7 +145,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  campaign_level_index = 6
+  campaign_level_index = 7
 
 end
 
@@ -1300,7 +1300,7 @@ function level_6()
 
   l.index = 6
   l.map = camp_map_1()
-  l.map_pos = {-8, -60}
+  l.map_pos = {-8, -70}
   l.co_p1 = make_alecia()
   l.co_p2 = make_slydy()
   l.perfect_turns = 25
@@ -1345,22 +1345,20 @@ function level_7()
 
   l.index = 7
   l.map = camp_map_1()
-  l.map_pos = {-8, -60}
+  l.map_pos = {24, -70}
   l.co_p1 = make_alecia()
   l.co_p2 = make_slydy()
   l.perfect_turns = 25
 
-  local pink_hachi = make_slydy_hachi()
-  pink_hachi.team_index = 4
-
   l.dialogue = {
+    {co_alecia, "it's personal.", true},
   }
 
   return l
 end
 
 -- index of all campaign levels 
-campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6()}
+campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6(), level_7()}
 
 -- memory read/write functions
 
