@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
--- debug = true
+debug = true
 
 palette_orange, palette_blue, palette_green, palette_pink = "orange star★", "blue moon●", "green earth🅾️", "pink quasar░"
 team_index_to_palette = {palette_orange, palette_blue, palette_green, palette_pink}
@@ -121,7 +121,7 @@ function end_turn()
   players_turn_team = players[players_turn]
 
   -- increment the turn count
-  turn_i += 1
+  turn_i += 2 - players_turn
 
   for unit in all(units) do
     unit.is_resting = false
@@ -304,16 +304,15 @@ function ai_coroutine()
 
           local path = ai_pathfinding(u, goal, true, true)
 
-          local path_movable = {}
+          -- find point in path that is closest to the goal
+          local p
           for t in all(path) do
+            -- disregard the enemy's hq if we're not infantry/mech
             if point_in_table(t, unit_movable_tiles) and (u.index < 3 or not points_equal(t, enemy_hq)) then
-              -- add the walkable points to the path but disregard the enemy's hq if we're not infantry/mech
-              add(path_movable, t)
+              p = t
             end
           end
 
-          -- find point in path that is closest to the goal
-          local p = path_movable[#path_movable]
           if p then
             ai_move(u, p)
 
