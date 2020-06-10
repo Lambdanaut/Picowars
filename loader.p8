@@ -360,7 +360,7 @@ function draw_campaign()
     -- dialogue over. run campaign mission
 
     -- write the map, commander and unit data to memory
-    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
+    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {false, false})
 
     -- write match meta to memory
     write_match_meta(current_level.index, current_level.co_p1.team_index, current_level.co_p2.team_index)
@@ -620,7 +620,7 @@ function camp_map_2()
   local m = {}
 
   m.name = "sami surprise"
-  m.r = {0, 0, 24, 20}
+  m.r = {22, 0, 28, 17}
   m.bg_color = 12
 
   m.load_external = 1
