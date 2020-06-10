@@ -312,8 +312,8 @@ function ai_coroutine()
             end
           end
 
-          -- find point in path that is closest to enemy's hq
-          local p = point_closest_to_p(path_movable, goal)
+          -- find point in path that is closest to the goal
+          local p = path_movable[#path_movable]
           if p then
             ai_move(u, p)
 
@@ -540,20 +540,6 @@ function get_selection(p, include_resting)
   end
   -- selection is tile
   return {2, tile}
-end
-
-function point_closest_to_p(points, p)
-  -- returns the point in points closest to p that doesn't have a unit in it
-  local closest = points[1]
-  local closest_d = 32767
-  for p2 in all(points) do
-    local d = manhattan_distance(p, p2)
-    if d < closest_d and not get_unit_at_pos(p2) then
-      closest = p2
-      closest_d = d
-    end
-  end
-  return closest
 end
 
 function attack_coroutine()
