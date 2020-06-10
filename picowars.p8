@@ -173,9 +173,8 @@ function end_turn()
  
   players_turn = players_turn % 2 + 1
   players_turn_team = players[players_turn]
-
  
-  turn_i += 1
+  turn_i += 2 - players_turn
 
   for unit in all(units) do
     unit.is_resting = false
@@ -374,17 +373,8 @@ function ai_coroutine()
     end
   end
 
-  sort_table_by_f(structures, 
-    function(struct1, struct2)
-      return manhattan_distance(struct1.p, players_hqs[3-players_turn].p) > manhattan_distance(struct2.p, players_hqs[3-players_turn].p)
-    end
-  )
   for struct in all(structures) do
     if struct.type == 3 and struct.team == players_turn_team and not get_unit_at_pos(struct.p) then
-     
-
-     
-     
       local infantry_count = 1
       local mech_count = 1
       local total_unit_count = 1
