@@ -203,8 +203,6 @@ end
 
 function ai_update()
   if players_human[players_turn] then return end 
-
- 
  
   ai_units_ranged = {}
   ai_units_infantry = {}
@@ -237,8 +235,6 @@ function ai_update()
 end
 
 function ai_coroutine()
- 
-
   for i = 1, 3 do
     for u in all(ai_units) do 
       if u.active and not u.is_resting then
@@ -272,21 +268,13 @@ function ai_coroutine()
             end
           end
         elseif (u.index > 2 or not get_struct_at_pos(u.p, nil, players_turn_team)) then
-         
-         
           local attackables = {}
-
-         
-         
           for t in all(unit_movable_tiles) do
             attackables[t] = u:targets(t)
           end
-
-         
           local best_fight_u
           local best_fight_pos
           local best_fight_value = -32767 
-
           for t, attackable_unit in pairs(attackables) do
             for u2 in all(attackable_unit) do
              
@@ -308,7 +296,7 @@ function ai_coroutine()
             attack_coroutine()
             has_attacked = true
 
-            u:complete_move()  -- rest
+            u:complete_move()
           end
         end
 
@@ -360,15 +348,13 @@ function ai_coroutine()
 
           local path = ai_pathfinding(u, goal, true, true)
 
-          local path_movable = {}
+          local p
           for t in all(path) do
             if point_in_table(t, unit_movable_tiles) and (u.index < 3 or not points_equal(t, enemy_hq)) then
-             
-              add(path_movable, t)
+              p = t
             end
           end
-
-          local p = path_movable[#path_movable]
+          
           if p then
             ai_move(u, p)
 
@@ -388,9 +374,6 @@ function ai_coroutine()
     end
   end
 
- 
-
- 
   sort_table_by_f(structures, 
     function(struct1, struct2)
       return manhattan_distance(struct1.p, players_hqs[3-players_turn].p) > manhattan_distance(struct2.p, players_hqs[3-players_turn].p)
