@@ -57,7 +57,7 @@ p_guster = 234
 p_glitch = 202
 p_slydy = 232
 p_conrad = 200
-p_dan = 230
+p_slydy_hachi = 230
 p_hachi = 198
 p_storm = 228
 p_jethro = 194
@@ -145,7 +145,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  campaign_level_index = 4
+  campaign_level_index = 6
 
 end
 
@@ -351,7 +351,7 @@ end
 function draw_campaign()
   -- draw map
   cls(12)
-  map(0, 31, current_level.map_pos[1], current_level.map_pos[2], 16, 16)
+  map(0, 31, current_level.map_pos[1], current_level.map_pos[2], 16, 18)
 
   if not active_dialogue_coroutine then
     active_dialogue_coroutine = cocreate(dialogue_coroutine)
@@ -448,9 +448,9 @@ function dialogue_coroutine()
 
       dialogue_timer = 0
       if next_char == "." or next_char == "!" or next_char == "?" then
-        dialogue_timer = -0.30
-      elseif next_char == "," then
-        dialogue_timer = -0.15
+        dialogue_timer = -0.2
+      elseif next_char == "," or next_char == "∧" then
+        dialogue_timer = -0.1
       end
 
       while dialogue_timer < 0.0333 do
@@ -888,35 +888,15 @@ end
 -- commanders
 function make_commanders()
   commanders = {
-    make_dan(),
     make_sami(),
     make_hachi(),
+    make_slydy_hachi(),
     make_bill(),
     make_guster(),
+    make_glitch(),
     make_slydy(),
   }
 end
-
-function make_dan()
-  local co = {}
-
-  co.name = "dan"
-  co.sprite = p_dan
-  co.team_index = 1
-  co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = true
-  co.music = team_index_to_music[co.team_index]
-
-  co.units = make_units()
-
-  -- dan's units get 1 more healing from structures
-  for unit in all(co.units) do
-    unit.struct_heal_bonus = 1
-  end
-
-  return co
-end
-co_dan = make_dan()
 
 function make_sami()
   local co = {}
@@ -978,6 +958,27 @@ function make_hachi()
 end
 co_hachi = make_hachi()
 
+function make_slydy_hachi()
+  local co = {}
+
+  co.name = "hachi"
+  co.sprite = p_slydy_hachi
+  co.team_index = 1
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  -- slydy-hachi's non-infantry and non-mech units cost 15% less
+  for i=3, #co.units do
+    co.units[i].cost = flr(co.units[i].cost * 0.85)
+  end
+
+  return co
+end
+co_slydy_hachi = make_slydy_hachi()
+
 function make_bill()
   local co = {}
 
@@ -990,7 +991,7 @@ function make_bill()
 
   co.units = make_units()
 
-  -- bill's non-infantry units have 10% more luck
+  -- bill's units have 10% more luck
   for i=1,#co.units do
     co.units[i].luck_max = 2
   end
@@ -1054,8 +1055,8 @@ function make_guster()
   co.units = make_units()
 
   -- guster's ranged units have +1 range
-  co.units[4].range_max += 1
-  co.units[6].range_max += 1
+  co.units[5].range_max += 1
+  co.units[7].range_max += 1
 
   -- guster's ranged units have 30% more attack
   for i in all({unit_index_artillery, unit_index_rocket}) do
@@ -1084,6 +1085,26 @@ function make_guster()
   return co
 end
 co_guster = make_guster()
+
+function make_glitch()
+  local co = {}
+
+  co.name = "glitch"
+  co.sprite = p_glitch
+  co.team_index = 4  -- pink quasar
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+
+  co.units = make_units()
+
+  for i=1,#co.units do
+    co.units[i].sprite = flr(rnd(59)+134)
+  end
+
+  return co
+end
+co_glitch = make_glitch()
 
 function make_slydy()
   local co = {}
@@ -1114,8 +1135,8 @@ function level_1()
   l.perfect_turns = 25
 
   l.dialogue = {
-    {co_bill, "i'm here. i made it. "},
-    {co_bill, "i'll make orange star pay for what they've done. "},
+    {co_bill, "i'm here. i made it."},
+    {co_bill, "i'll make orange star pay for what they've done."},
     {co_bill, "..."},
     {co_bill, "but this is too easy.", true},
     {co_bill, "hachi, get your ass out here!"},
@@ -1124,7 +1145,7 @@ function level_1()
     {co_hachi, "is everything okay bill? what's going on?", true},
     {co_bill, "WHAT'S GOING ON.....?"},
     {co_bill, "what's going on?!", true},
-    {co_bill, "you really are sick hachi. take responsibility, and die.", true},
+    {co_bill, "you really are sick hachi. take responsibility and die.", true},
   }
 
   return l
@@ -1148,7 +1169,7 @@ function level_2()
     {co_hachi, "well you sure as hell picked odd times to start fighting wars!"},
     {co_hachi, "what's your specialty commander?"},
     {co_sami, "infantry specialist first class sir!"},
-    {co_hachi, "drop the \"sir\", sami. you're a commander now. call me hachi."},
+    {co_hachi, "drop the \"sir\", sami. you're a fellow commander now. call me hachi."},
     {co_sami, "yes si-..."},
     {co_sami, "r... yes hachi"},
     {co_hachi, "you'll get it."},
@@ -1179,6 +1200,7 @@ function level_3()
     {co_alecia, "orange star bitch.", true},
     {co_alecia, "you have no idea what your general is capable of.", true},
     {co_sami, "er? you mean hachi..?"},
+    {co_alecia, ".. YOU really HAVE NO IDEA. DO YOU..?", true},
     {co_conrad, "that's far enough sami."},
     {co_conrad, "your march towards blue moon territory ends here."},
     {co_sami, "look dude, i'm just defending our land from y o u r invasion.", true},
@@ -1197,8 +1219,8 @@ function level_4()
   l.index = 4
   l.map = camp_map_1()
   l.map_pos = {-44, -20}
-  l.co_p1 = make_sami()
-  l.co_p2 = make_bill()
+  l.co_p1 = make_bill()
+  l.co_p2 = make_slydy_hachi()
   l.perfect_turns = 25
 
   l.dialogue = {
@@ -1208,25 +1230,137 @@ function level_4()
     {co_sami, "what's going on? why the invasion of orange star territory?", true},
     {co_bill, "..."},
     {co_bill, "sami..."},
-    {co_bill, "where.. is.. hachi.. right.. now..", true},
+    {co_bill, "where is hachi right now?", true},
     {co_sami, "er.. he's investigating the invasion."},
     {co_bill, "no, sami, that's what y o u are doing. what is h a c h i doing?"},
-    {co_sami, "... i don't know."},
+    {co_sami, ".. i don't know."},
     {co_sami, "why does it matter?"},
     {co_bill, "sami, our feud isn't with you."},
     {co_bill, "it's becoming clear that you're just another one of his pawns."},
     {co_bill, "you need to understand."},
     {co_bill, "hachi isn't who you think he is."},
-    {co_bill, "he's a monster."},
-    {co_bill, "and right now in order to stop him, i have to stop you."},
-    {co_bill, "you will not take blue moon."},
+    {co_bill, "he's a monster.",},
+    {co_slydy_hachi, "oh hey bill! i didn't hear you knock.", true},
+    {co_sami, "hachi! finally, we can sort all of this out."},
+    {co_slydy_hachi, "is eve▒ything okay bilL? what's g▒ing on?", true},
+    {co_bill, "sami, you should head home if you know what's good for you.", true},
+    {co_slydy_hachi, "wH▒ts G▒OING on BILL?"},
+    {co_bill, "i have a demon to slay."},
+  }
+
+  return l
+end
+
+function level_5()
+  local l = {}
+
+  l.index = 5
+  l.map = camp_map_1()
+  l.map_pos = {-40, -50}
+  l.co_p1 = make_guster()
+  l.co_p2 = make_glitch()
+  l.perfect_turns = 25
+
+  l.dialogue = {
+    {co_slydy_hachi, "▒▒…,∧. ▒…░▒M░… .▒…∧  ░▒…. i'll be back for you ░▒ bill. ░▒ "},
+    {co_sami, "..."},
+    {co_sami, "WHAT THE hell"},
+    {co_sami, "WHAT was THAT?"},
+    {co_bill, "CLEARLY NOT HACHI..."},
+    {co_guster, "...", true},
+    {co_guster, "h-- hello there fellow commanders.."},
+    {co_sami, "guster? "},
+    {co_guster, "my brother heard that orange star was in the area.."},
+    {co_guster, "and sent me in to investi- gate.."},
+    {co_guster, "he may have mentioned that you recently became an orange star co sami.", true},
+    {co_sami, "this fucking guy ", true},
+    {co_bill, "??? "},
+    {co_guster, "i've been sami's partner in the past."},
+    {co_sami, "yeah, well that's `ex- partner` now, dude. ", true},
+    {co_guster, "look, i came to help. i think we both have bigger fish to fry.", true},
+    {co_guster, "blue moon isn't the only one dealing with... anomalies. "},
+    {co_guster, "green earth has also been under siege by glitchy automata."},
+    {co_sami, "glitchy automata?"},
+    {co_guster, "abhorrencies generated from uncertaincies in the quantum foam."},
+    {co_bill, "eh?"},
+    {co_guster, "scary fucking monsters from hell."},
+    {co_bill, "oh, yeah, that sounds about right."},
+    {co_glitch, "who the f░▒ck d o you th^nk youre t…lking░▒ on about like that"},
+    {co_glitch, "i'll f░▒ck your soul^", true},
+    {co_sami, "oh my.."},
+    {co_guster, "i've got this fucker."},
+    {co_guster, "eat my tactical long ranged lead."},
+  }
+
+  return l
+end
+
+function level_6()
+  local l = {}
+
+  l.index = 6
+  l.map = camp_map_1()
+  l.map_pos = {-8, -60}
+  l.co_p1 = make_alecia()
+  l.co_p2 = make_slydy()
+  l.perfect_turns = 25
+
+  local pink_hachi = make_slydy_hachi()
+  pink_hachi.team_index = 4
+
+  l.dialogue = {
+    {co_glitch, "sh░▒t", true},
+    {co_glitch, "creator st▒rm must hear …about this░"},
+    {co_guster, "creator.. storm?"},
+    {co_sami, "that's what i heard too.. i think."},
+    {co_conrad, "hey guys. "},
+    {co_conrad, "we've been cleaning up the last of the glitches in blue moon."},
+    {co_conrad, "sorry we couldn't join sooner."},
+    {co_conrad, "and sami, i apologize for my hostility back in blue moon."},
+    {co_conrad, "you aren't the enemy here."},
+    {co_conrad, "we're all in this to- gether."},
+    {co_slydy, "how touching"},
+    {co_alecia, "ugh, what is that thing?", true},
+    {co_slydy, "\"thing\"? that is no way to refer to"},
+    {co_slydy, "p^e^n^u^l^t^i^m^a^t^e b^e^a^u^t^y"},
+    {co_alecia, "those eyes...", true},
+    {co_alecia, "i know them...", true},
+    {co_slydy, "yes dear"},
+    {pink_hachi, "it is i. h▒chi"},
+    {co_alecia, "you are the monster that burnt my homeland to the ground.", true},
+    {co_slydy, "i am simply reforming your homeland."},
+    {co_slydy, "changing it into something greater."},
+    {co_slydy, "shaping it into my own perfect image."},
+    {co_slydy, "COVERING IT IN glitch."},
+    {co_alecia, "shut the fuck up and die.", true},
+    {co_alecia, "guys i've got this one.", true},
+    {co_alecia, "it's personal.", true},
+  }
+
+  return l
+end
+
+function level_7()
+  local l = {}
+
+  l.index = 7
+  l.map = camp_map_1()
+  l.map_pos = {-8, -60}
+  l.co_p1 = make_alecia()
+  l.co_p2 = make_slydy()
+  l.perfect_turns = 25
+
+  local pink_hachi = make_slydy_hachi()
+  pink_hachi.team_index = 4
+
+  l.dialogue = {
   }
 
   return l
 end
 
 -- index of all campaign levels 
-campaign_levels = {level_1(), level_2(), level_3(), level_4()}
+campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6()}
 
 -- memory read/write functions
 
@@ -1571,16 +1705,16 @@ a1a0a0a0a293a3a3b30000009280f2b200000567777dd50000022ffffffff32300ffffffffff2200
 d5d6e0d6c50000000000000093a3a3b3dd7ddddddddd7ddd0002333333333333ee77eeeeeee222ee073333333333373001111111111111112888888888828878
 000000000000000000000000000000000dd77ddd7dddddd00006333333333333e77e22f2eeefff2e337333333333333011111155555555518788881118882788
 92f170f6b2000000d00000a1a0a0a200ddddd1d1d1dd1d1d002666fff3333663e7eefff2eeef00fe3333733333733333111555ccccccccc58878113331888288
-00000000000000000000000000000000ddd00111111d10d1002f066fff066663eeee00022ee0000eb33bfffb333bbbbb115cc1111ccc111c8881233333188828
-93a3a3a3b3d0000000000092f1c6c500ddd000211210001d02ff006fff666633e7e000002e077700b3f2222fbb322f2015cc222222f22222881322fffff28882
-00000000000000000000000000000000dd1100002200001102f000fff000ff63ee2077702e072700f2ff2222ffb222205c2227772ff277728222622fff262888
-00000018a0a0a2a1a0a0a29271f7b20022122200f200221102f070f2f070fff6ee2072702e077700ff2226722222762012f267172ff2717282277062f2707288
-00000000000000000000000000000000f21f27100f0172102ff0002ff000f2f6ee207770fff0000effff2702fff207202fff26772ff267722ff20c7fff0c6228
-000000921982b29271f1b293a3f5b300222f2222ff2222002ff00f2ff000f2ffee2f000fffff002e2fff2222fff2222012fff212ffff222fffff222fff222ff8
-00000000000000000000000000000000112fffffffffff002fff0fffff0ff2ff0e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff02ffffffff2fffff2
-00d00092703bb292c371b200000000d00112fffff22fff0002ffffffff0ffff30ee2ffeeeeeff2e002feeeffffffee200002f2f2ff22fff022ffffffffffff22
-000000000000000000000000000000000002fffffffff200002ffff22222ff6300ee20ffffff002e002fffff22ffff2000002fffffffff00002ffffffffff222
-0000003ba3a3b393a3a3b30000d0000000002fff222ff00000022ffeeeeff323000e2000099fffa000222ffffffff200000222ff7777f0000002ffff22ff2222
+00000000000000000000000000000000ddd00111111d10d1002f666ffff66663eeef00022ee0000eb33bfffb333bbbbb115cc1111ccc111c8881233333188828
+93a3a3a3b3d0000000000092f1c6c500ddd000211210001d02fff66fff666633e7e000002e077700b3f2222fbb322f2015cc222222f22222881322fffff28882
+00000000000000000000000000000000dd1100002200001102f00fffff66ff63ee2077702e072700f2ff2222ffb222205c2227772ff277728222622fff262888
+00000018a0a0a2a1a0a0a29271f7b20022122200f200221102fff0f2f00ffff6ee2072702e077700ff2226722222762012f267172ff2717282277062f2707288
+00000000000000000000000000000000f21f27100f0172102fffff2ffff0fff6ee207770fff0000effff2702fff207202fff26772ff267722ff20c7fff0c6228
+000000921982b29271f1b293a3f5b300222f2222ff2222002fffff2fffffffffee2f000fffff002e2fff2222fff2222012fff212ffff222fffff222fff222ff8
+00000000000000000000000000000000112fffffffffff002fffffffffffffff0e2fff222222f2e02ffffffff22fff20002ff2f2ffff2ff02ffffffff2fffff2
+00d00092703bb292c371b200000000d00112fffff22fff0002fff22222f2fff30ee2ffeeeeeff2e002feeeffffffee200002f2f2ff22fff022ffffffffffff22
+000000000000000000000000000000000002fffffffff200002ffeeeefffff6300ee20ffffff002e002fffff22ffff2000002fffffffff00002ffffffffff222
+0000003ba3a3b393a3a3b30000d0000000002fff222ff00000022ffffffff323000e2000099fffa000222ffffffff200000222ff7777f0000002ffff22ff2222
 00000000000000000000000000000000000002ffffff2000000002222222230300002aafffffffaf02222222222220000022222ffffff200000002ffff202020
 888888803333333000000000000000000000500000050000000002333333333200000222222220000000000ff000000255500000000000050011111111111100
 899999803bbbbb300000000000000000000575000057500000002333333333330002277ffffff200000000faafff22025570000000000070011c111111111111
@@ -1603,16 +1737,16 @@ d5d6e0d6c50000000000000093a3a3b3dd7ddddddddd7ddd0002333333333333ee77eeeeeee222ee
 170007100000000000000567777dd500dd7ddddddddd7ddd0002333333333333ee77eeeeeee222ee073333333333373001111111111111112888888888828878
 100770100000000000000567777dd5000dd77ddd7dddddd00006333333333333e77e22f2eeefff2e337333333333333011111155555555518788881118882788
 100700100000000000000567777dd500ddddd1d1d1dd1d1d002666fff3333663e7eefff2eeeffffe3333733333733333111555ccccccccc58878113331888288
-100000100000000000000567777dd500ddd1d111111d11d1002f666ffff66663eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
-111711100000000000000567777dd500ddd111f11f11f11d02fff66fff666633e7ee00ff2ee000feb3f2222fbb322f2015ccf222ffff222f8813222ffff28882
-000000000000000000000567777dd500dd110000ff00001102f00fffff66ff63ee2f070f2ef070fef2ff2222ffb222205c2f27772ff2777282226722ff262888
-777777770000000000000567777dd500ff1f222ffff22f1102ff00f2f00ffff6ee2f070f2ef000feff2226422222462012f267172ff271728227707fff707288
-777777770000000000000567777dd500ff1f27d2ff2d72102fffff2fff000ff6ee2f000fffff0f2effff27a2fff2a7202fff26772ff267722ff20c7fff0c6228
-000077700000000000000567777dd500ffff2717ff2172002fffff2fffffffffee2ff0ffffff0f2e2fff2222fff2222012fff212ffff222fffff222fff222ff8
-000777000000000000000567777dd50011fff222fff22f002fffffffffffffff0e2fff222222f2e02ffffffff22fff20002fffffffff2ff02ffffffff2fffff2
-007770000000000000000567777dd500011ffffff22fff0002fff22222f2fff30ee2ffeeeeeff2e002ff2fffffffff200002ffffff22fff022ffffffffffff22
-077700000000000000000567777dd5000002fffffffff200002ffeeeefffff6300ee20ffffff002e002ffff2222fff2000002fffffffff00002ffffffffff222
-777777770000000000000567777dd50000002fff222ff00000022ffffffff323000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
+100000100000000000000567777dd500ddd1d111111d11d1002f066fff066663eeeef0f22eef0ffeb33bfffb333bbbbb115cc1111ccc111c8881333333188828
+111711100000000000000567777dd500ddd111f11f11f11d02ff006fff666633e7ef00ff2ee000feb3f2222fbb322f2015ccf222ffff222f8813222ffff28882
+000000000000000000000567777dd500dd110000ff00001102f000fff000ff63ee2f070f2ef070fef2ff2222ffb222205c2f27772ff2777282226722ff262888
+777777770000000000000567777dd500ff1f222ffff22f1102f070f2f070fff6ee2f070f2ef000feff2226422222462012f267172ff271728227707fff707288
+777777770000000000000567777dd500ff1f27d2ff2d72102ff0002ff000f2f6ee2f000fffff0f2effff27a2fff2a7202fff26772ff267722ff20c7fff0c6228
+000077700000000000000567777dd500ffff2717ff2172002ff00f2ff000f2ffee2ff0ffffff0f2e2fff2222fff2222012fff212ffff222fffff222fff222ff8
+000777000000000000000567777dd50011fff222fff22f002fff0fffff0ff2ff0e2fff222222f2e02ffffffff22fff20002fffffffff2ff02ffffffff2fffff2
+007770000000000000000567777dd500011ffffff22fff0002ffffffff0ffff30ee2ffeeeeeff2e002ff2fffffffff200002ffffff22fff022ffffffffffff22
+077700000000000000000567777dd5000002fffffffff200002ffff22222ff6300ee20ffffff002e002ffff2222fff2000002fffffffff00002ffffffffff222
+777777770000000000000567777dd50000002fff222ff00000022ffeeeeff323000e2000099fffa000222ffffffff200000222ff1222f0000002fff222ff2222
 777777770000000000000567777dd500000002ffffff2000000002222222230300002aafffffffaf02222222222220000022222ffffff200000002ffff202020
 __gff__
 0000000000000000002121210021030300000000000000004a212121060a12090000000000000000122121210303031100000000000000000021212103030303464a5200860000000000000000000000000000000000000000002121000000210000002100000000000005050000000500000005000000000000050500000005
@@ -1651,7 +1785,7 @@ __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000d0000000000000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-0002000013550215502d5503a5503f5503f5503d5503750032500335002e500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
+0002000013510215102d5103a5103f5103f5103d5103750032500335002e500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500005000050000500
 000300002865025650216401e6401664011640096300063000630006300000020600266001e600006001260009600066000060000600006000060000600006000060000600006000060000600006000060000600
 000100001905032050240500d05003050070500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 010a00001b340243402934030340333403734037340333402e3402b3402b3402b3402b3402e3402e340303403034033340333403334033340333403334033340393003d300343002a30024300253002e30031300
