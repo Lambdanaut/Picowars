@@ -368,8 +368,7 @@ function ai_coroutine()
             end
           end
 
-         
-          local p = point_closest_to_p(path_movable, goal)
+          local p = path_movable[#path_movable]
           if p then
             ai_move(u, p)
 
@@ -605,20 +604,6 @@ function get_selection(p, include_resting)
   end
  
   return {2, tile}
-end
-
-function point_closest_to_p(points, p)
- 
-  local closest = points[1]
-  local closest_d = 32767
-  for p2 in all(points) do
-    local d = manhattan_distance(p, p2)
-    if d < closest_d and not get_unit_at_pos(p2) then
-      closest = p2
-      closest_d = d
-    end
-  end
-  return closest
 end
 
 function attack_coroutine()
@@ -1190,9 +1175,6 @@ function selector_get_move_input()
 end
 
 function selector_move_to(change_x, change_y)
- 
- 
-
   local new_p = {selector_p[1] + change_x, selector_p[2] + change_y}
   local in_bounds = point_in_rect(new_p, {current_map.r[1]*8, current_map.r[2]*8, current_map.r[3]*8, current_map.r[4]*8})
 
