@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
--- debug = true
+debug = true
 
 palette_orange, palette_blue, palette_green, palette_pink = "orange star★", "blue moon●", "green earth🅾️", "pink quasar░"
 team_index_to_palette = {palette_orange, palette_blue, palette_green, palette_pink}
@@ -156,6 +156,7 @@ function ai_update()
   ai_units_ranged = {}
   ai_units_infantry = {}
   other_ai_units = {}
+  non_ai_units = {}
   for u in all(units) do
     if u.team == players_turn_team then
       if u.ranged then
@@ -165,12 +166,28 @@ function ai_update()
       else
         add(other_ai_units, u)
       end
+    else
+      add(non_ai_units, u)
     end
   end
   ai_units = {}
   merge_tables(ai_units, ai_units_ranged)  -- move ranged first
   merge_tables(ai_units, ai_units_infantry)  -- then infantry
   merge_tables(ai_units, other_ai_units)  -- then other units
+
+  enemy_attackables = {}
+  for u2 in all(non_ai_units) do
+    if u2.ranged then
+      merge_tables(enemy_attackables, u2:ranged_attack_tiles())
+    elseif not u2.carrier then
+      local u2_movable = u2:get_movable_tiles()[1]
+      for t in all(u2_movable) do
+        for u2_attackable in all(get_tile_adjacents(t)) do
+          add(enemy_attackables, u2_attackable)
+        end
+      end
+    end
+  end
 
   if not active_ai_coroutine then
     active_ai_coroutine = cocreate(ai_coroutine)
@@ -302,7 +319,21 @@ function ai_coroutine()
 
           end
 
-          local path = ai_pathfinding(u, goal, true, true)
+          local goal_path = ai_pathfinding(u, goal, true, true)
+
+          local path = {}
+          if u.ranged then
+            -- don't move ranged units into enemy attack
+            for t in all(goal_path) do
+              if point_in_table(t, enemy_attackables) then
+                insert(path, 1, t)
+              else
+                add(path, t)
+              end
+            end
+          else
+            path = goal_path
+          end
 
           -- find point in path that is closest to the goal
           local p

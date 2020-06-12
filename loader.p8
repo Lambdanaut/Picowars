@@ -145,7 +145,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  campaign_level_index = 8
+  campaign_level_index = 4
 
 end
 
@@ -273,7 +273,7 @@ function update_verses_menu()
     team1 = 1
     team2 = 2
 
-    write_assets(current_map, {make_alecia(), make_alecia()}, players_human)
+    write_assets(current_map, {make_guster(), make_storm()}, players_human)
     write_match_meta(0, team1, team2)
   elseif btnp5 then
     -- back to main menu
@@ -360,7 +360,7 @@ function draw_campaign()
     -- dialogue over. run campaign mission
 
     -- write the map, commander and unit data to memory
-    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
+    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {false, false})
 
     -- write match meta to memory
     write_match_meta(current_level.index, current_level.co_p1.team_index, current_level.co_p2.team_index)
