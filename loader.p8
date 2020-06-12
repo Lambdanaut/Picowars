@@ -145,7 +145,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  campaign_level_index = 4
+  campaign_level_index = 8
 
 end
 
@@ -360,7 +360,7 @@ function draw_campaign()
     -- dialogue over. run campaign mission
 
     -- write the map, commander and unit data to memory
-    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {false, false})
+    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
 
     -- write match meta to memory
     write_match_meta(current_level.index, current_level.co_p1.team_index, current_level.co_p2.team_index)
@@ -1488,7 +1488,7 @@ function level_8()
   l.map_pos = {45, -40}
   l.co_p1 = make_hachi()
   l.co_p2 = make_storm()
-  l.perfect_turns = 30
+  l.perfect_turns = 35
 
   l.dialogue = {
     {co_bill, "is it dead..?"},

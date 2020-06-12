@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
-debug = true
+-- debug = true
 
 palette_orange, palette_blue, palette_green, palette_pink = "orange star★", "blue moon●", "green earth🅾️", "pink quasar░"
 team_index_to_palette = {palette_orange, palette_blue, palette_green, palette_pink}
@@ -151,6 +151,19 @@ end
 function ai_update()
   if players_human[players_turn] then return end  -- don't do ai for humans
 
+  if not active_ai_coroutine then
+    active_ai_coroutine = cocreate(ai_coroutine)
+  elseif costatus(active_ai_coroutine) == dead_str then
+    active_ai_coroutine = nil
+  else
+    coresume(active_ai_coroutine)
+  end
+
+end
+
+function ai_coroutine()
+  -- 3 waves of passing through our units
+
   -- update ai's units
   -- sort units based on infantry/mech type
   ai_units_ranged = {}
@@ -175,32 +188,21 @@ function ai_update()
   merge_tables(ai_units, ai_units_infantry)  -- then infantry
   merge_tables(ai_units, other_ai_units)  -- then other units
 
+  -- generate places the enemy can attack so our ranged units can avoid them
   enemy_attackables = {}
-  for u2 in all(non_ai_units) do
-    if u2.ranged then
-      merge_tables(enemy_attackables, u2:ranged_attack_tiles())
-    elseif not u2.carrier then
-      local u2_movable = u2:get_movable_tiles()[1]
-      for t in all(u2_movable) do
-        for u2_attackable in all(get_tile_adjacents(t)) do
-          add(enemy_attackables, u2_attackable)
+  if #ai_units_ranged > 0 then
+    for u2 in all(non_ai_units) do if u2.ranged then merge_tables(enemy_attackables, u2:ranged_attack_tiles())
+      elseif not u2.carrier then
+        local u2_movable = u2:get_movable_tiles()[1]
+        for t in all(u2_movable) do
+          for u2_attackable in all(get_tile_adjacents(t)) do
+            add(enemy_attackables, u2_attackable)
+          end
         end
       end
+      yield()  -- pause to avoid lag
     end
   end
-
-  if not active_ai_coroutine then
-    active_ai_coroutine = cocreate(ai_coroutine)
-  elseif costatus(active_ai_coroutine) == dead_str then
-    active_ai_coroutine = nil
-  else
-    coresume(active_ai_coroutine)
-  end
-
-end
-
-function ai_coroutine()
-  -- 3 waves of passing through our units
 
   for i = 1, 3 do
     for u in all(ai_units) do 
@@ -319,7 +321,7 @@ function ai_coroutine()
 
           end
 
-          local goal_path = ai_pathfinding(u, goal, true, true)
+          local goal_path = ai_pathfinding(u, goal, true)
 
           local path = {}
           if u.ranged then
@@ -421,7 +423,7 @@ function ai_move(u, p)
   end
 end
 
-function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
+function ai_pathfinding(unit, target, is_ai)
   -- draw marker on unit we're pathfinding for
   local tiles_to_explore = {}
   local tiles_to_explore = prioqueue.new()
@@ -469,13 +471,13 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
     for t in all(get_tile_adjacents(current_t)) do
 
       local unit_at_t = get_unit_at_pos(t)
-      if ignore_enemy_units or not unit_at_t or unit_at_t.team == unit.team then
+      if is_ai or not unit_at_t or unit_at_t.team == unit.team then
         local tile_m = unit:tile_mobility(mget(t[1] / 8, t[2] / 8))
 
-        local friendly_units_weight = 0
-        if weigh_friendly_units and unit_at_t and unit_at_t.team == unit.team then friendly_units_weight = 2 end
+        local ai_weight = 0
+        if is_ai and unit_at_t and unit_at_t.team == unit.team then ai_weight += 2 end  -- avoid friendly units in path if we're ai
 
-        local new_g_score = current_t_g_score + tile_m + friendly_units_weight
+        local new_g_score = current_t_g_score + tile_m + ai_weight
  
         if new_g_score < table_point_index(g_scores, t) and tile_m < 255 then
           -- if the new g_score is less than the old one for this tile, record it
@@ -712,10 +714,6 @@ function selector_init()
     end
   end
 
-  -- targets within attack range
-  -- selector_attack_targets = {}
-  -- unload tiles
-  -- selector_unload_tiles = {}
 end
 
 function selector_update()
@@ -1404,7 +1402,6 @@ function make_structure(struct_type, p, team)
       self.animator.animation_flag = true
       self.capture_left = 20
       if self.type == 1 then
-        -- hq captured; end game
         end_game(players_turn)
       end
     else
@@ -2007,7 +2004,6 @@ function draw_msg(center_pos, msg, bg_color, draw_bar)
   local x_pos = center_pos[1] + 5 - msg_length * 4 / 2 
   local y_pos = center_pos[2]
 
-  -- draw message background rectangle
   rectfill(
     x_pos - 2,
     y_pos - 2,
