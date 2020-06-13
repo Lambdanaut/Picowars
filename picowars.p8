@@ -43,7 +43,7 @@ function _update()
     unit:update()
   end
 
-  if debug and btnp4 and btnp5 then
+  if btnp4 and btnp5 then
     end_game(players_turn)
   end
 end

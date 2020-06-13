@@ -145,7 +145,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  campaign_level_index = 8
+  -- campaign_level_index = 7
 
 end
 
@@ -1269,6 +1269,7 @@ function level_1()
     {co_hachi, "is everything okay bill? what's going on?", true},
     {co_bill, "WHAT'S GOING ON.....?"},
     {co_bill, "what's going on?!", true},
+    {co_bill, "after all we've been through together,", true},
     {co_bill, "you really are sick hachi. take responsibility and die.", true},
   }
 
@@ -1475,6 +1476,34 @@ function level_7()
   l.perfect_turns = 10
 
   l.dialogue = {
+    {co_slydy, "that was filthy"},
+    {co_slydy, "that was a filthy way to play."},
+    {co_slydy, "you're still so dirty and you all need to be cleaned."},
+    {co_hachi, "hey team!"},
+    {co_sami, "yeck! it's back!", true},
+    {co_bill, "no sami, wait, this is the real hachi!"},
+    {co_hachi, "heh, i should hope so!"},
+    {co_hachi, "check it, i don't have grody giant lips or anything."},
+    {co_guster, "he checks out. resonance scanning returns nil corrupt vectors."},
+    {co_hachi, "that's right buddy! I'M ALL NATURAL hachi. "},
+    {co_sami, "that's a relief. i kinda figured uh.."},
+    {co_sami, "you were dead.."},
+    {co_conrad, "hachi i can't believe you're alive.", true},
+    {co_hachi, "you alright there big guy..? ", true},
+    {co_conrad, "i'm... i'll be okay.", true},
+    {co_alecia, "so what's the sitch, hachi?", true},
+    {co_hachi, "well, i unearthed some intel while i was out."},
+    {co_hachi, "this creature slydy here, and the others you've faced,"},
+    {co_hachi, "they're all the creations of a very bright, misguided young man.", true},
+    {co_hachi, "storm.", true},
+    {co_hachi, "to shut down this glitch blight spreading across the land..", true},
+    {co_hachi, "we need to apprehend him and shut down his factory. ", true},
+    {co_hachi, "and i've pinpointed his exact location."},
+    {co_sami, "what are we waiting for then? let's take him down!"},
+    {co_slydy, "..."},
+    {co_slydy, "i'm still here you know."},
+    {co_slydy, "and none of you glitchless freaks are going to set a foot near creator."},
+    {co_slydy, "today marks the beginning of a clean world."},
   }
 
   return l
@@ -1669,6 +1698,10 @@ function read_match_meta()
   match_meta_is_campaign_mission = match_meta_level_index > 0
   match_meta_p1_team_index = peek_increment()
   match_meta_p2_team_index = peek_increment()
+
+  if match_meta_coming_from_match and match_meta_is_campaign_mission then
+    campaign_level_index = match_meta_level_index
+  end
 end
 
 function write_match_meta(level_index, p1_team_index, p2_team_index)
