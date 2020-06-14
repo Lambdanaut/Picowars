@@ -174,7 +174,7 @@ function ai_coroutine()
     if u.team == players_turn_team then
       if u.ranged then
         add(ai_units_ranged, u)
-      elseif u.mobility_type == 0 then
+      elseif u.index < 3 then
         add(ai_units_infantry, u)
       else
         add(other_ai_units, u)
