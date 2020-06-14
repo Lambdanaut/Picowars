@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
--- debug = true
+debug = true
 
 palette_orange, palette_blue, palette_green, palette_pink = "orange star★", "blue moon●", "green earth🅾️", "pink quasar░"
 team_index_to_palette = {palette_orange, palette_blue, palette_green, palette_pink}

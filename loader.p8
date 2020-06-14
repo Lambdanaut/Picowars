@@ -123,9 +123,6 @@ function _init()
   -- setup cartdata
   cartdata("picowars") 
 
-  -- setup initial commander data
-  make_commanders()
-
   -- load save
   write_save()
   read_save()
@@ -145,7 +142,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  -- campaign_level_index = 7
+  -- campaign_level_index = 5
 
 end
 
@@ -261,7 +258,7 @@ function update_verses_menu()
     sfx(0)
   end
 
-  if btnp4 then 
+  if btnp4 then
     -- start vs match
     sfx(1)
 
@@ -273,8 +270,11 @@ function update_verses_menu()
     team1 = 1
     team2 = 2
 
-    write_assets(current_map, {make_guster(), make_storm()}, players_human)
-    write_match_meta(0, team1, team2)
+    local co1 = co_slydy
+    local co2 = co_guster
+
+    write_assets(current_map, {co1, co2}, players_human)
+    write_match_meta(0, team1, team2, co1.index, co2.index)
   elseif btnp5 then
     -- back to main menu
     sfx(1)
@@ -315,10 +315,12 @@ function update_victory_defeat_menu()
           menu_index = 1
         end
       else
+        sfx(1)
         menu_index = 1
       end
     else
       -- not campaign mission. return to main menu
+      sfx(1)
       menu_index = 1
     end
   end
@@ -354,6 +356,7 @@ function draw_campaign()
   map(0, 31, current_level.map_pos[1], current_level.map_pos[2], 16, 18)
 
   if not active_dialogue_coroutine then
+    ongoing_dialogue = current_level.dialogue
     active_dialogue_coroutine = cocreate(dialogue_coroutine)
 
   elseif costatus(active_dialogue_coroutine) == dead_str then
@@ -363,7 +366,12 @@ function draw_campaign()
     write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
 
     -- write match meta to memory
-    write_match_meta(current_level.index, current_level.co_p1.team_index, current_level.co_p2.team_index)
+    write_match_meta(
+      current_level.index,
+      current_level.co_p1.team_index,
+      current_level.co_p2.team_index,
+      current_level.co_p1.index,
+      current_level.co_p2.index)
 
     fadeout()
 
@@ -382,12 +390,13 @@ function draw_victory_defeat_menu()
       local speed = calculate_speed(match_result_turn_count, current_level.perfect_turns)
       local technique = calculate_technique(match_result_units_built[1], match_result_units_lost[1])
       local score = (speed + technique) / 2
-      print_double("!!!victory!!!", 38, 8, 3, 11) 
+      print_double("!!!victory!!!", 38, 6, 3, 11) 
       line(10, 15, 118, 15, 3)
-      rectfill(10, 16, 118, 50, 6)
+      rectfill(10, 16, 118, 48, 6)
       print_double("speed: " .. to_rank(speed), 38, 22, 3, 11) 
       print_double("technique: " .. to_rank(technique), 38, 30, 3, 11) 
       print_double("total rank: " .. to_rank(score), 38, 38, 3, 11) 
+
     else
       print_double("defeat", 53, 60, 9, 8)
     end
@@ -404,6 +413,20 @@ function draw_victory_defeat_menu()
     print_double("press ❎ or 🅾️ to continue", 13, 85, 10, 11) 
   end
 
+  draw_victory_dialogue()
+
+end
+
+function draw_victory_dialogue()
+  if not active_victory_dialogue_coroutine then
+    printh(match_meta_p1_commander.dialogue[1][2])
+    ongoing_dialogue = match_meta_p1_commander.dialogue
+    active_victory_dialogue_coroutine = cocreate(dialogue_coroutine)
+  elseif costatus(active_victory_dialogue_coroutine) == dead_str then
+
+  elseif active_victory_dialogue_coroutine then
+    coresume(active_victory_dialogue_coroutine)
+  end
 end
 
 function start_map()
@@ -416,10 +439,10 @@ function dialogue_coroutine()
   local last_co
   current_dialogue_index = 0
 
-  while current_dialogue_index < #current_level.dialogue + 1 do
+  while current_dialogue_index < #ongoing_dialogue + 1 do
 
     current_dialogue_index += 1
-    local next_dialogue = current_level.dialogue[current_dialogue_index]
+    local next_dialogue = ongoing_dialogue[current_dialogue_index]
 
     if last_co and last_co ~= next_dialogue[1].name then
       -- play commander switchout animation
@@ -988,27 +1011,17 @@ function make_war_tank()
 end
 
 -- commanders
-function make_commanders()
-  commanders = {
-    make_sami(),
-    make_hachi(),
-    make_slydy_hachi(),
-    make_bill(),
-    make_guster(),
-    make_glitch(),
-    make_slydy(),
-  }
-end
-
 function make_sami()
   local co = {}
 
+  co.index = 1
   co.name = "sami"
   co.sprite = p_sami
   co.team_index = 1  -- orange star
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "Score one for the grunts!"}}
 
   co.units = make_units()
 
@@ -1042,12 +1055,14 @@ co_sami = make_sami()
 function make_hachi()
   local co = {}
 
+  co.index = 2
   co.name = "hachi"
   co.sprite = p_hachi
   co.team_index = 1
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "i may be old, but i can still rumble!"}}
 
   co.units = make_units()
 
@@ -1063,12 +1078,14 @@ co_hachi = make_hachi()
 function make_slydy_hachi()
   local co = {}
 
+  co.index = 3
   co.name = "hachi"
   co.sprite = p_slydy_hachi
   co.team_index = 1
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "I ▒▒M░ay be old, but …░I can s ti…░ll r ▒▒mble!"}}
 
   co.units = make_units()
 
@@ -1084,12 +1101,14 @@ co_slydy_hachi = make_slydy_hachi()
 function make_bill()
   local co = {}
 
+  co.index = 4
   co.name = "bill"
   co.sprite = p_bill
   co.team_index = 2  -- blue moon
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "lucks on our side!"}}
 
   co.units = make_units()
 
@@ -1105,14 +1124,26 @@ co_bill = make_bill()
 function make_alecia()
   local co = {}
 
+  co.index = 5
   co.name = "alecia"
   co.sprite = p_alecia
   co.team_index = 2
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "you thought i'd give up that easy?"}}
 
   co.units = make_units()
+
+  -- alecia's units are healed by 3 by structures
+  for unit in all(co.units) do
+    unit.struct_heal_bonus = 1
+
+    -- all of alecia's units have 10% less firepower
+    for i=1, #unit.damage_chart do
+      unit.damage_chart[i] *= 0.9
+    end
+  end
 
   return co
 end
@@ -1121,12 +1152,14 @@ co_alecia = make_alecia()
 function make_conrad()
   local co = {}
 
+  co.index = 6
   co.name = "conrad"
   co.sprite = p_conrad
   co.team_index = 2
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "justice is the intention."}}
 
   co.units = make_units()
 
@@ -1147,12 +1180,14 @@ co_conrad = make_conrad()
 function make_guster()
   local co = {}
 
+  co.index = 7
   co.name = "guster"
   co.sprite = p_guster
   co.team_index = 3  -- green earth
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "my calculations were nominal."}}
 
   co.units = make_units()
 
@@ -1191,12 +1226,14 @@ co_guster = make_guster()
 function make_glitch()
   local co = {}
 
+  co.index = 8
   co.name = "glitch"
   co.sprite = p_glitch
   co.team_index = 4  -- pink quasar
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"}}
 
   co.units = make_units()
 
@@ -1212,14 +1249,31 @@ co_glitch = make_glitch()
 function make_slydy()
   local co = {}
 
+  co.index = 9
   co.name = "slydy"
   co.sprite = p_slydy
   co.team_index = 4  -- pink quasar
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "the world is a cleaner place."}}
 
   co.units = make_units()
+
+  for unit in all(co.units) do
+    -- conrads's units cost 
+    unit.struct_heal_bonus = -1
+
+    -- slydy's units cost 15% more
+    if unit.index > 2 then
+      unit.cost = ceil(unit.cost * 1.15)
+    end
+
+    -- all of slydy's units have 30% more firepower
+    for i=1, #unit.damage_chart do
+      unit.damage_chart[i] *= 1.3
+    end
+  end
 
   return co
 end
@@ -1228,12 +1282,14 @@ co_slydy = make_slydy()
 function make_storm()
   local co = {}
 
+  co.index = 10
   co.name = "storm"
   co.sprite = p_storm
   co.team_index = 4  -- pink quasar
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "i fight for my children."}}
 
   co.units = make_units()
 
@@ -1246,6 +1302,18 @@ function make_storm()
 end
 co_storm = make_storm()
 
+commanders = {
+  co_sami,
+  co_hachi,
+  co_slydy_hachi,
+  co_bill,
+  co_alecia,
+  co_conrad,
+  co_guster,
+  co_glitch,
+  co_slydy,
+  co_storm,
+}
 
 -- campaign levels
 function level_1()
@@ -1698,13 +1766,15 @@ function read_match_meta()
   match_meta_is_campaign_mission = match_meta_level_index > 0
   match_meta_p1_team_index = peek_increment()
   match_meta_p2_team_index = peek_increment()
+  match_meta_p1_commander = commanders[peek_increment()]
+  match_meta_p2_commander = commanders[peek_increment()]
 
   if match_meta_coming_from_match and match_meta_is_campaign_mission then
     campaign_level_index = match_meta_level_index
   end
 end
 
-function write_match_meta(level_index, p1_team_index, p2_team_index)
+function write_match_meta(level_index, p1_team_index, p2_team_index, p1_commander_index, p2_commander_index)
   -- writes metadata about a match to be read by loader after the match
   memory_i = 0x5dc0
 
@@ -1712,6 +1782,8 @@ function write_match_meta(level_index, p1_team_index, p2_team_index)
   poke_increment(level_index)
   poke_increment(p1_team_index)
   poke_increment(p2_team_index)
+  poke_increment(p1_commander_index)
+  poke_increment(p2_commander_index)
 end
 
 function clear_match_meta()
