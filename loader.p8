@@ -60,7 +60,7 @@ p_conrad = 200
 p_slydy_hachi = 230
 p_hachi = 198
 p_storm = 228
-p_jethro = 194
+p_jethro = 196
 
 
 -- music
@@ -142,7 +142,7 @@ function _init()
     menu_index = 4  -- victory/defeat screen
   end
 
-  -- campaign_level_index = 5
+  campaign_level_index = 9
 
 end
 
@@ -719,6 +719,17 @@ function camp_map_8()
   return m
 end
 
+function camp_map_9()
+  local m = {}
+
+  m.name = "cat's claws"
+  m.r = {0, 21, 12, 25}
+  m.bg_color = 12
+
+  m.load_external = 0
+
+  return m
+end
 
 
 -- mapping of map options to maps in vs mode selection
@@ -1302,6 +1313,28 @@ function make_storm()
 end
 co_storm = make_storm()
 
+function make_jethro()
+  local co = {}
+
+  co.index = 11
+  co.name = "jethro"
+  co.sprite = p_jethro
+  co.team_index = 3
+  co.team_icon = team_index_to_team_icon[co.team_index]
+  co.available = false
+  co.music = team_index_to_music[co.team_index]
+  co.dialogue = {{co, "meow!"}}
+
+  co.units = make_units()
+
+  -- jethro's infantry and mechs have a +10 to their capture rate
+  co.units[unit_index_infantry].capture_bonus += 10
+  co.units[unit_index_mech].capture_bonus += 10
+
+  return co
+end
+co_jethro = make_jethro()
+
 commanders = {
   co_sami,
   co_hachi,
@@ -1313,6 +1346,7 @@ commanders = {
   co_glitch,
   co_slydy,
   co_storm,
+  co_jethro
 }
 
 -- campaign levels
@@ -1325,6 +1359,7 @@ function level_1()
   l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
   l.perfect_turns = 10
+  l.co_unlocks = co_bill
 
   l.dialogue = {
     {co_bill, "i'm here. i made it."},
@@ -1353,6 +1388,7 @@ function level_2()
   l.co_p1 = make_sami()
   l.co_p2 = make_alecia()
   l.perfect_turns = 10
+  l.co_unlocks = co_alecia
 
   l.dialogue = {
     {co_hachi, "what the hell was that about...", true},
@@ -1388,6 +1424,7 @@ function level_3()
   l.co_p1 = make_sami()
   l.co_p2 = make_conrad()
   l.perfect_turns = 10
+  l.co_unlocks = co_conrad
 
   l.dialogue = {
     {co_alecia, "orange star bitch.", true},
@@ -1453,6 +1490,7 @@ function level_5()
   l.co_p1 = make_guster()
   l.co_p2 = make_glitch()
   l.perfect_turns = 10
+  l.co_unlocks = co_guster
 
   l.dialogue = {
     {co_slydy_hachi, "▒▒…,∧. ▒…░▒M░… .▒…∧  ░▒…. i'll be back for you ░▒ bill. ░▒ "},
@@ -1497,6 +1535,7 @@ function level_6()
   l.co_p1 = make_alecia()
   l.co_p2 = make_slydy()
   l.perfect_turns = 10
+  l.co_unlocks = co_glitch
 
   local pink_hachi = make_slydy_hachi()
   pink_hachi.team_index = 4
@@ -1542,6 +1581,7 @@ function level_7()
   l.co_p1 = make_hachi()
   l.co_p2 = make_slydy()
   l.perfect_turns = 10
+  l.co_unlocks = co_slydy
 
   l.dialogue = {
     {co_slydy, "that was filthy"},
@@ -1586,6 +1626,7 @@ function level_8()
   l.co_p1 = make_hachi()
   l.co_p2 = make_storm()
   l.perfect_turns = 35
+  l.co_unlocks = co_storm
 
   l.dialogue = {
     {co_bill, "is it dead..?"},
@@ -1612,8 +1653,54 @@ function level_8()
   return l
 end
 
+function level_9()
+  local l = {}
+
+  l.index = 9
+  l.map = camp_map_9()
+  l.map_pos = {45, -40}
+  l.co_p1 = make_bill()
+  l.co_p2 = make_jethro()
+  l.perfect_turns = 32
+  l.co_unlocks = co_jethro
+
+  l.dialogue = {
+    {co_sami, "we did it!"},
+    {co_alecia, "good riddance."},
+    {co_conrad, "the glitch generators have been dismantled."},
+    {co_guster, "soon this region will return to normalcy."},
+    {co_bill, "..."},
+    {co_bill, "yeah but guys, storm escaped."},
+    {co_hachi, "there'll always be an enemy out there, plotting evil."},
+    {co_hachi, "i believe we have earned ourselves a respite from this war."},
+    {co_alecia, "that sounds nice.."},
+    {co_conrad, "to peace!"},
+    {co_hachi, "to peace!"},
+    {co_jethro, ".."},
+    {co_jethro, "mrow???"},
+    {co_bill, "uh... guys?"},
+    {co_bill, "who brought the cat?", true},
+    {co_conrad, "oh my god he's so cute", true},
+    {co_bill, "really now, i'm highly alergic and...", true},
+    {co_jethro, "mrow!!!", true},
+    {co_conrad, "oh my god bill he's got those lil epaulettes on his shoulders.", true},
+    {co_jethro, "mrow!!", true},
+    {co_bill, "argh! get him off me! i'm -- *sneezes* i can't deal", true},
+    {co_hachi, "sorry bill, this is your war to fight.", true},
+    {co_hachi, "anyone else up for some war room? i've got new battle maps."},
+    {co_sami, "i'm in!"},
+    {co_bill, "guys!?", true},
+    {co_alecia, "me too!"},
+    {co_jethro, "mrow!!", true},
+    {co_guster, "i'm looking forward to seeing how they play."},
+    {co_bill, "aaahghhhggg", true},
+  }
+
+  return l
+end
+
 -- index of all campaign levels 
-campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6(), level_7(), level_8()}
+campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6(), level_7(), level_8(), level_9()}
 
 -- memory read/write functions
 

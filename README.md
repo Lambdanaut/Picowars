@@ -7,8 +7,8 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Victory/Defeat screen
 * Dialogue
+* Credits
 * Save/load functionality
 * 8 Campaign missions
 * Unlockable commanders
@@ -57,7 +57,7 @@ Done
  * Maps menu
 * Dialogue System
 * APC
-
+* Victory/Defeat screen
 
 
 Bugs-to-fix
