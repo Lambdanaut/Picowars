@@ -1661,7 +1661,7 @@ function level_9()
   l.map_pos = {45, -40}
   l.co_p1 = make_bill()
   l.co_p2 = make_jethro()
-  l.perfect_turns = 32
+  l.perfect_turns = 31
   l.co_unlocks = co_jethro
 
   l.dialogue = {
@@ -1692,7 +1692,6 @@ function level_9()
     {co_bill, "guys!?", true},
     {co_alecia, "me too!"},
     {co_jethro, "mrow!!", true},
-    {co_guster, "i'm looking forward to seeing how they play."},
     {co_bill, "aaahghhhggg", true},
   }
 
