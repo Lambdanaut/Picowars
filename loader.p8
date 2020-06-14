@@ -1602,7 +1602,7 @@ function level_7()
     {co_alecia, "so what's the sitch, hachi?", true},
     {co_hachi, "well, i unearthed some intel while i was out."},
     {co_hachi, "this creature slydy here, and the others you've faced,"},
-    {co_hachi, "they're all the creations of a very bright, misguided young man.", true},
+    {co_hachi, "they're all the creations of a very bright, mis- guided young man.", true},
     {co_hachi, "storm.", true},
     {co_hachi, "to shut down this glitch blight spreading across the land..", true},
     {co_hachi, "we need to apprehend him and shut down his factory. ", true},
