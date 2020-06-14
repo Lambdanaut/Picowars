@@ -202,27 +202,7 @@ end
 
 function ai_update()
   if players_human[players_turn] then return end 
- 
-  ai_units_ranged = {}
-  ai_units_infantry = {}
-  other_ai_units = {}
-  for u in all(units) do
-    if u.team == players_turn_team then
-      if u.ranged then
-        add(ai_units_ranged, u)
-      elseif u.mobility_type == 0 then
-        add(ai_units_infantry, u)
-      else
-        add(other_ai_units, u)
-      end
-    end
-  end
-  ai_units = {}
-  merge_tables(ai_units, ai_units_ranged) 
-  merge_tables(ai_units, ai_units_infantry) 
-  merge_tables(ai_units, other_ai_units) 
-
- 
+  
   if not active_ai_coroutine then
     active_ai_coroutine = cocreate(ai_coroutine)
   elseif costatus(active_ai_coroutine) == dead_str then
@@ -234,6 +214,44 @@ function ai_update()
 end
 
 function ai_coroutine()
+  ai_units_ranged = {}
+  ai_units_infantry = {}
+  other_ai_units = {}
+  non_ai_units = {}
+  for u in all(units) do
+    if u.team == players_turn_team then
+      if u.ranged then
+        add(ai_units_ranged, u)
+      elseif u.index < 3 then
+        add(ai_units_infantry, u)
+      else
+        add(other_ai_units, u)
+      end
+    else
+      add(non_ai_units, u)
+    end
+  end
+  ai_units = {}
+  merge_tables(ai_units, ai_units_ranged) 
+  merge_tables(ai_units, ai_units_infantry) 
+  merge_tables(ai_units, other_ai_units) 
+
+  enemy_attackables = {}
+  if #ai_units_ranged > 0 then
+    for u2 in all(non_ai_units) do
+      if u2.ranged then merge_tables(enemy_attackables, u2:ranged_attack_tiles())
+      else
+        local u2_movable = u2:get_movable_tiles()[1]
+        for t in all(u2_movable) do
+          for u2_attackable in all(get_tile_adjacents(t)) do
+            add(enemy_attackables, u2_attackable)
+          end
+        end
+      end
+      yield()
+    end
+  end
+
   for i = 1, 3 do
     for u in all(ai_units) do 
       if u.active and not u.is_resting then
@@ -345,7 +363,19 @@ function ai_coroutine()
 
           end
 
-          local path = ai_pathfinding(u, goal, true, true)
+          local goal_path = ai_pathfinding(u, goal, true, true)
+          local path = {}
+          if u.ranged then
+            for t in all(goal_path) do
+              if point_in_table(t, enemy_attackables) then
+                insert(path, 1, t)
+              else
+                add(path, t)
+              end
+            end
+          else
+            path = goal_path
+          end
 
           local p
           for t in all(path) do
@@ -455,10 +485,6 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
         current_t = table_point_index(to_explore_parents, current_t)
 
         if point_in_table(current_t, return_path) then
-         
-         
-         
-         
           return {unit.p}
         end
 
@@ -466,15 +492,8 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
       end
       return return_path
     end
-
-   
-   
-   
-   
-
    
     local current_t_g_score = table_point_index(g_scores, current_t)
-
    
     for t in all(get_tile_adjacents(current_t)) do
 
@@ -488,18 +507,11 @@ function ai_pathfinding(unit, target, ignore_enemy_units, weigh_friendly_units)
         local new_g_score = current_t_g_score + tile_m + friendly_units_weight
  
         if new_g_score < table_point_index(g_scores, t) and tile_m < 255 then
-         
-         
-
           local tiles_to_explore_point_i_or_nil = point_in_table(t, tiles_to_explore.values)
 
           to_explore_parents[t] = current_t
           g_scores[t] = new_g_score
           local new_f_score = new_g_score + manhattan_distance(t, target)
-
-         
-         
-         
           if not tiles_to_explore_point_i_or_nil then
            
             tiles_to_explore:add(t, new_f_score)
@@ -517,8 +529,6 @@ function manhattan_distance(p, target)
 end
 
 function ai_calculate_attack_value(u, u2, tile)
- 
- 
   local damage_done = u:calculate_damage(u2)
   local gain = (damage_done + min(0, u2.hp - damage_done)) * u2.cost
   local loss
@@ -528,8 +538,6 @@ function ai_calculate_attack_value(u, u2, tile)
     local damage_loss = u2:calculate_damage(u, true, tile, u2.hp - damage_done)
     loss = (damage_loss + min(0, u.hp - damage_loss)) * u.cost
   end
-
- 
   local s = get_struct_at_pos(u2.p)
   if s and u.index < 3 then
     gain += 5
@@ -556,13 +564,6 @@ function get_struct_at_pos(p, team, not_team, struct_type, not_struct_type)
 end
 
 function get_selection(p, include_resting)
-   
-   
-     
-     
-     
-   
-
   local unit = get_unit_at_pos(p)
   if unit and (include_resting or not unit.is_resting) then
    
@@ -583,7 +584,6 @@ function attack_coroutine()
   attack_coroutine_u1.currently_attacking = true
   attack_coroutine_u2.currently_attacking = true
 
- 
   selector_p = copy_v(attack_coroutine_u2.p)
   attack_timer = 0
   local damage_done = attack_coroutine_u1:calculate_damage(attack_coroutine_u2)
