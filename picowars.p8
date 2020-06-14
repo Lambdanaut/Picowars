@@ -729,8 +729,10 @@ function selector_update()
     -- do selecting
 
     -- get arrow key directional value. left or down = -1. up or right = +1
+    local allow_horizontal
+    if selector_selection_type == 3 or selector_selection_type == 9 then allow_horizontal = true end
     local arrow_val
-    if btnp(2) or btnp(1) then arrow_val = 1 elseif btnp(3) or btnp(0) then arrow_val = -1 end
+    if btnp(2) or (allow_horizontal and btnp(1)) then arrow_val = 1 elseif btnp(3) or (allow_horizontal and btnp(0)) then arrow_val = -1 end
 
     if not btn(5) and selector_selection_type == 5 then
       -- end checking unit attack range
