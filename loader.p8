@@ -1188,9 +1188,9 @@ function make_conrad()
     -- conrads's units are only healed by 1 by structures
     unit.struct_heal_bonus = -1
 
-    -- all of conrads units have 10% more firepower
+    -- all of conrads units have 15% more firepower
     for i=1, #unit.damage_chart do
-      unit.damage_chart[i] *= 1.1
+      unit.damage_chart[i] *= 1.15
     end
   end
 
@@ -1282,9 +1282,6 @@ function make_slydy()
   co.units = make_units()
 
   for unit in all(co.units) do
-    -- conrads's units cost 
-    unit.struct_heal_bonus = -1
-
     -- slydy's units cost 15% more
     if unit.index > 2 then
       unit.cost = ceil(unit.cost * 1.15)

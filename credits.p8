@@ -2,13 +2,66 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
+scrolldown_i = 0
+
+scrolldown_cast = {
+  {198, "hachi", "tea", "medicine", "commander-in-chief", "units cost less to build",
+    "hachi retired from\nhis post and opened\na war supplies shop"
+  },
+  {238, "sami", "chocolate", "cowards", "infantry specialist", "captures cities faster.\nstronger infantry/mech\nweaker other units.",
+    "sami was promoted\nand is training a new\n team of mechanics and\n direct combat specialist."
+  },
+  {236, "bill", "casinos", "cats", "risky strategist", "has higher chance of\ndealing bonus damage.",
+    "bill escaped jethro\nand bought a pit bull."
+  },
+  {206, "alecia", "smoothies", "fast food", "chief medic", "units heal faster but\ndo less damage.",
+    "alecia returned home\nand rebuilt her town."
+  },
+  {200, "conrad", "cats", "callous friends", "munitions expert", "units heal slower but\ndo more damage.",
+    "conrad adopted jethro\nand fell in love with alecia.\n"
+  },
+  {234, "guster", "computers", "love", "techno-marksman", "stronger ranged units but\nnon-ranged do less damage.",
+    "guster built a robot\nwife, whom he is very dis-\nsatisfied with."
+  },
+  {230, "slydy-hachi", "???", "???", "???", "copies the unit stats\nof hachi.",
+    "slydy-hachi turned\nback into slydy\nand ceased to exist."
+  },
+  {202, "glitch", "creator storm", "patterns", "computer error", "unit graphics appear glitched.",
+    "glitch moved into\nguster's server cluster,\nand then into his robo-wife.\nguster has no idea."
+  },
+  {230, "slydy", "herself", "hachi", "gooey glitch-queen", "units cost more but\ndo much more damage.",
+    "slydy melted into\nnothingness."
+  },
+  {228, "storm", "friendship", "abandonment", "genius teen", "all units have +1\nmovement range.",
+    "storm lost his only\nfriends, who he created\nout of deep loneliness.\nhe is seeking revenge."
+  },
+  {196, "jethro", "sea-meat", "chipmunks", "inconsolable war-lord", "captures property instantly.",
+    "jethro moved in with\nconrad and alecia.\nhe wishes they fed him\nwet food twice a day."
+  },
+}
+
 function _update()
+
 end
 
 function _draw()
   cls()
+  print_double("= cast =", 0,0,7,8)
 end
 
+function print_outlined(str, x, y, col, outline_col)
+  rectfill(x - 1, y - 1, x + #str * 4 - 1, y + 5, outline_col)
+  print(str, x, y, col)
+end
+
+function print_double(str, x, y, col, double_color)
+  for a=x-1,x+1 do
+    for b=y-1,y+1 do
+      print(str,a,b,double_color)
+    end
+  end
+  print(str, x, y, col)
+end
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
