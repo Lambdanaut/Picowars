@@ -410,7 +410,7 @@ function draw_victory_defeat_menu()
   end
 
   if last_checked_time % 2 > 1 then
-    print_double("press ❎ or 🅾️ to continue", 13, 85, 10, 11) 
+    print_double("press ❎ or 🅾️ to continue", 13, 55, 10, 11) 
   end
 
   draw_victory_dialogue()
@@ -419,8 +419,11 @@ end
 
 function draw_victory_dialogue()
   if not active_victory_dialogue_coroutine then
-    printh(match_meta_p1_commander.dialogue[1][2])
-    ongoing_dialogue = match_meta_p1_commander.dialogue
+    if match_result_reason == 1 then 
+      ongoing_dialogue = match_meta_p1_commander.dialogue
+    else
+      ongoing_dialogue = match_meta_p2_commander.dialogue
+    end
     active_victory_dialogue_coroutine = cocreate(dialogue_coroutine)
   elseif costatus(active_victory_dialogue_coroutine) == dead_str then
 
