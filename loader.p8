@@ -312,7 +312,8 @@ function update_victory_defeat_menu()
           -- final level
           -- do endgame credits
           campaign_level_index -= 1
-          menu_index = 1
+          write_save()
+          load("credits.p8")
         end
       else
         sfx(1)
@@ -430,11 +431,6 @@ function draw_victory_dialogue()
   elseif active_victory_dialogue_coroutine then
     coresume(active_victory_dialogue_coroutine)
   end
-end
-
-function start_map()
-  -- start a map
-  load("picowars.p8")
 end
 
 -- coroutines
@@ -1953,6 +1949,11 @@ function fadeout()
       start_map()
     end
   end
+end
+
+function start_map()
+  -- start a map
+  load("picowars.p8")
 end
 
 function calculate_speed(turns_completed, min_perfect_turns)
