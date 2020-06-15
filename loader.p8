@@ -114,7 +114,12 @@ last_checked_time = 0.0
 delta_time = 0.0  -- time since last frame
 memory_i = starting_memory
 campaign_level_index = 1
+
+-- dialogue defaults
 dialogue_timer = 0
+ongoing_dialogue = {}
+current_dialogue_index = 1
+allow_dialogue_skipping = false
 
 
 function _init()
@@ -295,7 +300,9 @@ function update_campaign()
 end
 
 function update_victory_defeat_menu()
-  if btnp4 then 
+  local victory_dialogue_complete = current_dialogue_index >= #ongoing_dialogue
+
+  if btnp4 and victory_dialogue_complete then 
     sfx(1)
 
     if match_meta_is_campaign_mission then
@@ -357,6 +364,7 @@ function draw_campaign()
   map(0, 31, current_level.map_pos[1], current_level.map_pos[2], 16, 18)
 
   if not active_dialogue_coroutine then
+    allow_dialogue_skipping = true
     ongoing_dialogue = current_level.dialogue
     active_dialogue_coroutine = cocreate(dialogue_coroutine)
 
@@ -399,7 +407,7 @@ function draw_victory_defeat_menu()
       print_double("total rank: " .. to_rank(score), 38, 38, 3, 11) 
 
     else
-      print_double("defeat", 53, 60, 9, 8)
+      print_double("defeat", 53, 44, 9, 8)
     end
   else
     -- not campaign level. 
@@ -422,6 +430,9 @@ function draw_victory_dialogue()
   if not active_victory_dialogue_coroutine then
     if match_result_reason == 1 then 
       ongoing_dialogue = match_meta_p1_commander.dialogue
+      if current_level.victory_dialogue then
+        merge_tables(ongoing_dialogue, current_level.victory_dialogue)
+      end
     else
       ongoing_dialogue = match_meta_p2_commander.dialogue
     end
@@ -435,7 +446,7 @@ end
 
 -- coroutines
 function dialogue_coroutine()
-  local last_co
+  local last_speaker_i
   current_dialogue_index = 0
 
   while current_dialogue_index < #ongoing_dialogue + 1 do
@@ -443,7 +454,7 @@ function dialogue_coroutine()
     current_dialogue_index += 1
     local next_dialogue = ongoing_dialogue[current_dialogue_index]
 
-    if last_co and last_co ~= next_dialogue[1].name then
+    if last_speaker_i and last_speaker_i ~= next_dialogue[1].index then
       -- play commander switchout animation
       for i = 1, 10 do
         draw_dialogue("", 0, -(i / 2)^2)
@@ -452,7 +463,7 @@ function dialogue_coroutine()
     end
     current_dialogue = next_dialogue
 
-    if not last_co or last_co ~= next_dialogue[1].name then
+    if not last_speaker_i or last_speaker_i ~= next_dialogue[1].index then
       for i = 10, 1, -1 do
         draw_dialogue("", 0, -(i / 2)^2)
         yield()
@@ -497,7 +508,7 @@ function dialogue_coroutine()
       draw_dialogue(current_dialogue[2])
       print("🅾️", 120, 122, 0)
       yield()
-      while btn(5) do
+      while btn(5) and allow_dialogue_skipping do
         skip_dialogue_timer += delta_time
 
         if skip_dialogue_timer >= 2 then
@@ -517,7 +528,7 @@ function dialogue_coroutine()
     end
     if skip_dialogue then break end
 
-    last_co = current_dialogue[1].name
+    last_speaker_i = current_dialogue[1].index
 
   end
 end
@@ -1322,7 +1333,11 @@ function make_jethro()
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
-  co.dialogue = {{co, "meow!"}}
+  co.dialogue = {
+    {co, "what is best in life?"},
+    {co, "to crush your enemies, see them driven before you,", true},
+    {co, "and to hear the lamen- tation of their women.", true}
+  }
 
   co.units = make_units()
 
@@ -1694,6 +1709,14 @@ function level_9()
     {co_bill, "aaahghhhggg", true},
   }
 
+  l.victory_dialogue = {
+    {co_bill, "...", true},
+    {co_bill, "it's not over yet, is it..?", true},
+    {co_jethro, "no, bill."},
+    {co_jethro, "now we roll the credits."},
+    {co_bill, "oh my god.", true},
+  }
+
   return l
 end
 
@@ -1929,6 +1952,15 @@ function print_double(str, x, y, col, double_color)
     end
   end
   print(str, x, y, col)
+end
+
+function merge_tables(t1, t2)
+  -- merges the second table into the first
+  i = #t1 + 1
+  for _, v in pairs(t2) do 
+    t1[i] = v 
+    i += 1
+  end
 end
 
 function fadeout()
