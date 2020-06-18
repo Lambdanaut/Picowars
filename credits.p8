@@ -102,7 +102,7 @@ function _update()
   end
 
   if (btnp(4) or btnp(5)) and credits_done then
-    load("loader.p8")
+    load("picowars.p8")
   end
 
 end
