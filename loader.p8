@@ -103,6 +103,8 @@ main_menu_options = {"campaign mode", "verses mode", "unlockables"}
 vs_mode_option_selected = 0
 map_index_selected = 0
 ai_index_selected = 0
+p1_co_index_selected = 9
+p2_co_index_selected = 9
 map_index_options = {"eezee island", "arbor island", "lil highland", "long island"}
 ai_index_options = {"vs ai", "vs human", "ai vs ai"}
 
@@ -194,9 +196,9 @@ function _draw()
       local sprite_green_earth = 193
       local sprite_pink_quasar = 209
 
-      if campaign_level_index < 2 then sprite_blue_moon = 224 end
-      if campaign_level_index < 2 then sprite_green_earth = 224 end
-      if campaign_level_index < 2 then sprite_pink_quasar = 224 end
+      if campaign_level_index <= 2 then sprite_blue_moon = 224 end
+      if campaign_level_index <= 5 then sprite_green_earth = 224 end
+      if campaign_level_index <= 5 then sprite_pink_quasar = 224 end
 
       spr(192, 47, 38)
       spr(sprite_blue_moon, 56, 38)
@@ -243,6 +245,7 @@ end
 
 function update_verses_menu()
   if vs_mode_option_selected == 0 then 
+    -- map selection
     if btnp_left then 
       map_index_selected -= 1 
       sfx(0)
@@ -250,12 +253,21 @@ function update_verses_menu()
       map_index_selected += 1
       sfx(0)
     end
-  elseif btnp_left then 
-    ai_index_selected -= 1 
-    sfx(0)
-  elseif btnp_right then
-    ai_index_selected += 1 
-    sfx(0)
+  elseif vs_mode_option_selected == 1 then 
+    -- vs human/ai selection
+    if btnp_left then 
+      ai_index_selected -= 1 
+      sfx(0)
+    elseif btnp_right then
+      ai_index_selected += 1 
+      sfx(0)
+    end
+  elseif vs_mode_option_selected == 1 then 
+    -- p1 commander selection
+
+  elseif vs_mode_option_selected == 2 then 
+    -- p2 commander selection
+
   end
 
   if btnp_down or btnp_up then
@@ -272,14 +284,18 @@ function update_verses_menu()
     current_map = vs_map_index_mapping[map_index_selected+1]
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
-    team1 = 1
-    team2 = 2
 
-    local co1 = co_slydy
-    local co2 = co_guster
+    local co1 = commanders[p1_co_index_selected+1]
+    local co2 = commanders_p2[p2_co_index_selected+1]
+    printh(co1.name)
+    printh(co2.name)
 
-    write_assets(current_map, {co1, co2}, players_human)
-    write_match_meta(0, team1, team2, co1.index, co2.index)
+    -- write all commander and unit data to memory
+    commander_teams = write_assets(current_map, {co1, co2}, players_human)
+    printh(commander_teams[1])
+    printh(commander_teams[2])
+
+    write_match_meta(0, commander_teams[1], commander_teams[2], co1.index, co2.index)
   elseif btnp5 then
     -- back to main menu
     sfx(1)
@@ -288,7 +304,9 @@ function update_verses_menu()
 
   map_index_selected = map_index_selected % 6
   ai_index_selected = ai_index_selected % 3
-  vs_mode_option_selected = vs_mode_option_selected % 2
+  p1_co_index_selected = p1_co_index_selected % #commanders
+  p2_co_index_selected = p2_co_index_selected % #commanders_p2
+  vs_mode_option_selected = vs_mode_option_selected % 4
 end
 
 function init_campaign()
@@ -430,7 +448,7 @@ function draw_victory_dialogue()
   if not active_victory_dialogue_coroutine then
     if match_result_reason == 1 then 
       ongoing_dialogue = match_meta_p1_commander.dialogue
-      if current_level.victory_dialogue then
+      if current_level and current_level.victory_dialogue then
         merge_tables(ongoing_dialogue, current_level.victory_dialogue)
       end
     else
@@ -1042,7 +1060,7 @@ function make_sami()
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
-  co.dialogue = {{co, "Score one for the grunts!"}}
+  co.dialogue = {{co, "score one for the grunts!"}}
 
   co.units = make_units()
 
@@ -1346,19 +1364,26 @@ function make_jethro()
 end
 co_jethro = make_jethro()
 
-commanders = {
-  co_sami,
-  co_hachi,
-  co_slydy_hachi,
-  co_bill,
-  co_alecia,
-  co_conrad,
-  co_guster,
-  co_glitch,
-  co_slydy,
-  co_storm,
-  co_jethro
-}
+function make_commanders()
+  return {
+    make_sami(),
+    make_hachi(),
+    make_slydy_hachi(),
+    make_bill(),
+    make_alecia(),
+    make_conrad(),
+    make_guster(),
+    make_glitch(),
+    make_slydy(),
+    make_storm(),
+    make_jethro() 
+  }
+end
+
+commanders = make_commanders()
+
+-- commanders for vs mode
+commanders_p2 = make_commanders()
 
 -- campaign levels
 function level_1()
@@ -1822,13 +1847,20 @@ function write_assets(game_map, game_commanders, team_humans, team_indexes)
   -- game_commanders is a 2 indexed table of both of the commanders
   -- team_humans is a 2 indexed table indicating whether the player is a human or ai
   -- team_indexes is an optional 2 indexed table indicating what team each player should be on (orange star, blue moon.. etc)
+
+  -- returns the resulting commanders team indexes in a tuple {team1index, team2index}
+
   memory_i = starting_memory
   if not team_indexes then team_indexes = {} end
-  if game_commanders[1].team_index == game_commanders[2].team_index then game_commanders[2].team_index = (game_commanders[2].team_index + 1) % 4 end
+  if game_commanders[1].team_index == game_commanders[2].team_index then 
+    game_commanders[2].team_index = max(1, (game_commanders[2].team_index + 1) % 5)
+  end
   for i=1, 2 do
     write_co(game_commanders[i], team_humans[i], team_indexes[i])
   end
   write_map(game_map)
+
+  return {game_commanders[1].team_index, game_commanders[2].team_index}
 end
 
 function write_save()

@@ -100,6 +100,11 @@ function _update()
   if scrolldown_i == 20 then
     music(6)
   end
+
+  if (btnp(4) or btnp(5)) and credits_done then
+    load("loader.p8")
+  end
+
 end
 
 function _draw()

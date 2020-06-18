@@ -8,7 +8,6 @@ Todo in order
 -------------
 
 * Dialogue
-* Credits
 * Save/load functionality
 * 8 Campaign missions
 * Unlockable commanders
@@ -58,6 +57,7 @@ Done
 * Dialogue System
 * APC
 * Victory/Defeat screen
+* Credits
 
 
 Bugs-to-fix
