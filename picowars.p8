@@ -2093,8 +2093,10 @@ function calculate_technique(units_built, units_lost)
 end
 
 function to_rank(score)
-  rank_mapping = {'s','a','b','c','d','f'}
-  return rank_mapping[min(6, 11 - ceil(score/10))]
+  rank_mapping = {'a','b','c','d','f'}
+  local rank = rank_mapping[min(5, 11 - ceil(score/10))]
+  if score >= 100 then rank = 's' end
+  return rank
 end
 
 
