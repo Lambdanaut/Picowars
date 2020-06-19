@@ -103,8 +103,8 @@ main_menu_options = {"campaign mode", "verses mode", "unlockables"}
 vs_mode_option_selected = 0
 map_index_selected = 0
 ai_index_selected = 0
-p1_co_index_selected = 9
-p2_co_index_selected = 9
+p1_co_index_selected = 0
+p2_co_index_selected = 0
 map_index_options = {"eezee island", "arbor island", "lil highland", "long island"}
 ai_index_options = {"vs ai", "vs human", "ai vs ai"}
 
@@ -133,6 +133,11 @@ function _init()
   -- load save
   write_save()
   read_save()
+
+  -- make commanders for vs mode
+  -- done after reading the save because we have to see what's available
+  commanders_p1 = make_vs_commanders()
+  commanders_p2 = make_vs_commanders()
 
   -- read match result
   read_match_result()
@@ -262,16 +267,32 @@ function update_verses_menu()
       ai_index_selected += 1 
       sfx(0)
     end
-  elseif vs_mode_option_selected == 1 then 
-    -- p1 commander selection
-
   elseif vs_mode_option_selected == 2 then 
-    -- p2 commander selection
+    -- p1 commander selection
+    if btnp_left then 
+      p1_co_index_selected -= 1 
+      sfx(0)
+    elseif btnp_right then
+      p1_co_index_selected += 1 
+      sfx(0)
+    end
 
+  elseif vs_mode_option_selected == 3 then 
+    -- p2 commander selection
+    if btnp_left then 
+      p2_co_index_selected -= 1 
+      sfx(0)
+    elseif btnp_right then
+      p2_co_index_selected += 1 
+      sfx(0)
+    end
   end
 
-  if btnp_down or btnp_up then
+  if btnp_down then
     vs_mode_option_selected += 1
+    sfx(0)
+  elseif btnp_up then
+    vs_mode_option_selected -= 1
     sfx(0)
   end
 
@@ -285,15 +306,11 @@ function update_verses_menu()
     players_human[1] = ai_index_selected < 2
     players_human[2] = ai_index_selected == 1
 
-    local co1 = commanders[p1_co_index_selected+1]
+    local co1 = commanders_p1[p1_co_index_selected+1]
     local co2 = commanders_p2[p2_co_index_selected+1]
-    printh(co1.name)
-    printh(co2.name)
 
     -- write all commander and unit data to memory
     commander_teams = write_assets(current_map, {co1, co2}, players_human)
-    printh(commander_teams[1])
-    printh(commander_teams[2])
 
     write_match_meta(0, commander_teams[1], commander_teams[2], co1.index, co2.index)
   elseif btnp5 then
@@ -304,7 +321,7 @@ function update_verses_menu()
 
   map_index_selected = map_index_selected % 6
   ai_index_selected = ai_index_selected % 3
-  p1_co_index_selected = p1_co_index_selected % #commanders
+  p1_co_index_selected = p1_co_index_selected % #commanders_p1
   p2_co_index_selected = p2_co_index_selected % #commanders_p2
   vs_mode_option_selected = vs_mode_option_selected % 4
 end
@@ -366,14 +383,36 @@ function draw_main_menu()
 end
 
 function draw_verses_menu()
+  -- draw map and ai/human selection
   for y = 0, 1 do
     for x = 0, 1 do
       spr(last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
     end
   end
-  rectfill(38, 58 + (vs_mode_option_selected) * 19, 86, 64 + (vs_mode_option_selected) * 19, 4)
+  if vs_mode_option_selected < 2 then
+    -- draw selected
+    rectfill(38, 58 + (vs_mode_option_selected) * 19, 86, 64 + (vs_mode_option_selected) * 19, 4)
+  end
+
   print(map_index_options[map_index_selected+1], 39, 59, 7)
   print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
+
+  -- draw commander selection
+  local co1 = commanders_p1[p1_co_index_selected+1]
+  local co2 = commanders_p2[p2_co_index_selected+1]
+  spr(co1.sprite, 35, 105, 2, 2)
+  spr(co2.sprite, 78, 105, 2, 2)
+
+  local p1_outline = 0
+  local p2_outline = 0
+  if vs_mode_option_selected == 2 then
+    p1_outline = 4
+  elseif vs_mode_option_selected == 3 then
+    p2_outline = 4
+  end
+
+  print_outlined("p1:" .. co1.name, 24, 98, 7, p1_outline)
+  print_outlined("p2:" .. co2.name, 70, 98, 7, p2_outline)
 end
 
 function draw_campaign()
@@ -1058,7 +1097,7 @@ function make_sami()
   co.sprite = p_sami
   co.team_index = 1  -- orange star
   co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
+  co.available = true
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "score one for the grunts!"}}
 
@@ -1325,7 +1364,7 @@ function make_storm()
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
-  co.dialogue = {{co, "i fight for my children."}}
+  co.dialogue = {{co, "you've taken everything from me.", true}}
 
   co.units = make_units()
 
@@ -1366,24 +1405,39 @@ co_jethro = make_jethro()
 
 function make_commanders()
   return {
-    make_sami(),
-    make_hachi(),
-    make_slydy_hachi(),
-    make_bill(),
-    make_alecia(),
-    make_conrad(),
-    make_guster(),
-    make_glitch(),
-    make_slydy(),
-    make_storm(),
-    make_jethro() 
+    make_sami,
+    make_hachi,
+    make_slydy_hachi,
+    make_bill,
+    make_alecia,
+    make_conrad,
+    make_guster,
+    make_glitch,
+    make_slydy,
+    make_storm,
+    make_jethro 
   }
 end
 
-commanders = make_commanders()
+function instantiate_commanders(cos)
+  local new_cos = {}
+  for co in all(cos) do
+    add(new_cos, co())
+  end
+  return new_cos
+end
 
--- commanders for vs mode
-commanders_p2 = make_commanders()
+function make_vs_commanders()
+  local vs_cos = {}
+  for co in all(commanders) do
+    if co.available then
+      add(vs_cos, co)
+    end
+  end
+  return vs_cos
+end
+
+commanders = instantiate_commanders(make_commanders())
 
 -- campaign levels
 function level_1()
@@ -1890,6 +1944,7 @@ function read_save()
   for co in all(commanders) do
     local available = peek_increment()
     if available == 1 then co.available = true end
+    co.available = true
   end
 
   -- read available war maps to disk
