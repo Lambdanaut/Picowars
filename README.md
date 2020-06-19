@@ -7,10 +7,8 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Save/load functionality
-* Unlockable commanders
-* Dialogue
-* multiplayer
+* Make vs maps
+* Play through campaign, balancing scoring system
 
 
 Done
@@ -57,6 +55,9 @@ Done
 * Credits
 * 8 Campaign missions
 * Selectable team and commanders in VS mode
+* Save/load functionality
+* Unlockable commanders
+* Dialogue
 
 
 Bugs-to-fix

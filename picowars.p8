@@ -97,7 +97,7 @@ starting_memory = 0x4300
 menu_index = 1
 
 main_menu_selected = 0
-main_menu_options = {"campaign mode", "verses mode", "unlockables"}
+main_menu_options = {"campaign mode", "verses mode"}
 
 -- verses menu
 vs_mode_option_selected = 0
@@ -1195,7 +1195,7 @@ function make_bill()
   co.sprite = p_bill
   co.team_index = 2  -- blue moon
   co.team_icon = team_index_to_team_icon[co.team_index]
-  co.available = false
+  co.available = true
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "lucks on our side!"}}
 
@@ -1461,7 +1461,6 @@ function level_1()
   l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
   l.perfect_turns = 10
-  l.co_unlocks = co_bill
 
   l.dialogue = {
     {co_bill, "i'm here. i made it."},
@@ -1941,9 +1940,6 @@ function write_save()
     if co.available then available = 1 end
     poke_increment(available)
   end
-
-  -- write available war maps to disk
-
 end
 
 function read_save()
@@ -1957,8 +1953,13 @@ function read_save()
     local available = peek_increment()
     if available == 1 then co.available = true end
   end
+end
 
-  -- read available war maps to disk
+function delete_save()
+  -- utility for deleting a save
+  for i=0, 63 do
+    dset(i, 0)
+  end
 end
 
 function read_match_meta()
