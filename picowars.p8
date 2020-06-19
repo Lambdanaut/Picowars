@@ -139,6 +139,7 @@ function _init()
 
   -- read match result
   read_match_result()
+  clear_match_result()
 
   -- read match metadata
   read_match_meta()
@@ -151,7 +152,7 @@ function _init()
     end
     menu_index = 4  -- victory/defeat screen
   end
-  
+
 end
 
 function _update()
@@ -976,7 +977,7 @@ function make_apc()
   unit.sprite = 23
   unit.mobility_type = mobility_treads
   unit.travel = 11
-  unit.cost = 5
+  unit.cost = 4
   unit.range_min = 0
   unit.range_max = 0
   unit.luck_max = 1
@@ -1494,7 +1495,7 @@ function level_1()
   l.map_pos = {33, 40}
   l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
-  l.perfect_turns = 10
+  l.perfect_turns = 13
 
   l.dialogue = {
     {co_bill, "i'm here. i made it."},
@@ -1522,7 +1523,7 @@ function level_2()
   l.map_pos = {9, 8}
   l.co_p1 = make_sami()
   l.co_p2 = make_alecia()
-  l.perfect_turns = 10
+  l.perfect_turns = 14
   l.co_unlocks = co_alecia
 
   l.dialogue = {
@@ -1558,7 +1559,7 @@ function level_3()
   l.map_pos = {-23, 23}
   l.co_p1 = make_sami()
   l.co_p2 = make_conrad()
-  l.perfect_turns = 10
+  l.perfect_turns = 24
   l.co_unlocks = co_conrad
 
   l.dialogue = {
@@ -1586,7 +1587,7 @@ function level_4()
   l.map_pos = {-47, -9}
   l.co_p1 = make_bill()
   l.co_p2 = make_slydy_hachi()
-  l.perfect_turns = 10
+  l.perfect_turns = 21
 
   l.dialogue = {
     {co_sami, "i'm doing pretty well.. i haven't even needed hachi's aid."},
@@ -2053,6 +2054,17 @@ function read_match_result()
   match_result_turn_count = peek_increment()
 end
 
+function clear_match_result()
+  -- clears match result. run on loader startup
+  memory_i = 0x5ddd
+
+  poke_increment(0)
+  for i = 1, 2 do
+    poke_increment(0)
+    poke_increment(0)
+  end
+  peek_increment(0)
+end
 
 function set_palette(palette)
   if palette == 2 then
