@@ -105,7 +105,7 @@ map_index_selected = 0
 ai_index_selected = 0
 p1_co_index_selected = 0
 p2_co_index_selected = 0
-map_index_options = {"eezee island", "arbor island", "lil highland", "long island"}
+map_index_options = {"arbor island", "lil highland", "big island", "crossover"}
 ai_index_options = {"vs ai", "vs human", "ai vs ai"}
 
 -- fadeout variables
@@ -319,8 +319,8 @@ function update_verses_menu()
     menu_index = 1
   end
 
-  map_index_selected = map_index_selected % 6
-  ai_index_selected = ai_index_selected % 3
+  map_index_selected = map_index_selected % #vs_map_index_mapping
+  ai_index_selected = ai_index_selected % #ai_index_options
   p1_co_index_selected = p1_co_index_selected % #commanders_p1
   p2_co_index_selected = p2_co_index_selected % #commanders_p2
   vs_mode_option_selected = vs_mode_option_selected % 4
