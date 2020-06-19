@@ -872,6 +872,7 @@ function make_infantry()
   unit.index = unit_index_infantry
   unit.type = unit_infantry
   unit.sprite = 16
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_infantry
   unit.travel = 4
   unit.cost = 1
@@ -905,6 +906,7 @@ function make_mech()
   unit.index = unit_index_mech
   unit.type = unit_mech
   unit.sprite = 17
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_mech
   unit.travel = 3
   unit.cost = 3
@@ -938,6 +940,7 @@ function make_recon()
   unit.index = unit_index_recon
   unit.type = unit_recon
   unit.sprite = 18
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_tires
   unit.travel = 9
   unit.cost = 4
@@ -975,6 +978,7 @@ function make_apc()
   unit.index = unit_index_apc
   unit.type = unit_apc
   unit.sprite = 23
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_treads
   unit.travel = 11
   unit.cost = 4
@@ -1008,6 +1012,7 @@ function make_artillery()
   unit.index = unit_index_artillery
   unit.type = unit_artillery
   unit.sprite = 21
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_treads
   unit.travel = 6
   unit.cost = 6
@@ -1041,6 +1046,7 @@ function make_tank()
   unit.index = unit_index_tank
   unit.type = unit_tank
   unit.sprite = 19
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_treads
   unit.travel = 7
   unit.cost = 7
@@ -1074,6 +1080,7 @@ function make_rocket()
   unit.index = unit_index_rocket
   unit.type = unit_rocket
   unit.sprite = 22
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_tires
   unit.travel = 6
   unit.cost = 15
@@ -1107,6 +1114,7 @@ function make_war_tank()
   unit.index = unit_index_war_tank
   unit.type = unit_war_tank
   unit.sprite = 20
+  unit.sprite_offset = 64
   unit.mobility_type = mobility_treads
   unit.travel = 6
   unit.cost = 16
@@ -1363,7 +1371,7 @@ function make_glitch()
 
   -- glitch's unit graphics are glitched
   for i=1,#co.units do
-    co.units[i].sprite = flr(rnd(59)+134)
+    co.units[i].sprite_offset = 128
   end
 
   return co
@@ -1887,6 +1895,7 @@ function write_unit(u)
   poke_increment(u.index)
   write_string(u.type, 10)
   poke_increment(u.sprite)
+  poke_increment(u.sprite_offset)
   poke_increment(u.mobility_type)
   poke_increment(u.travel)
   poke_increment(u.cost)

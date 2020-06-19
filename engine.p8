@@ -969,6 +969,7 @@ function selector_draw()
   local struct_type = tile_info[3] 
   set_palette(players_turn_team)
   local x_corner, y_corner, gold, team_name = cam.p[1], cam.p[2], players_gold[players_turn], players_turn_team
+  local u = get_unit_at_pos(selector_p)
   if last_checked_time % 4 < 2 then team_name = players_co_name[players_turn] end
   if gold < 10 then gold = "0" .. gold end
   rectfill(x_corner, y_corner, x_corner + 81, y_corner + 19, 8)  -- background
@@ -978,6 +979,11 @@ function selector_draw()
   rectfill(x_corner + 114, y_corner, x_corner + 128, y_corner + 7, 2)  -- player's gold border
   rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8) -- players' gold background
   print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- player's gold
+  if u then
+    rectfill(x_corner, y_corner + 119, x_corner + 52, y_corner + 128, 8) -- unit info background
+    u.animator:draw({x_corner+2, y_corner + 119})
+    print(u.type, x_corner+13, y_corner+121, 0)
+  end
   pal()
   print(team_name, x_corner + 29, y_corner + 3, 0) -- team name
   print(tile_info[1], x_corner + 30, y_corner + 12, 0) -- tile name and defense
@@ -1152,23 +1158,16 @@ end
 function selector_move()
   selector_time_since_last_move += delta_time
 
-  -- get x and y change as a vector from controls input
   local change = selector_get_move_input()
-
-  -- move to the position based on input
-  -- don't move if we're in any prompt selection_type
   if selector_time_since_last_move > 0.1 then
     if change[1] and change[2] then
-      -- if both inputs are down, perform move twice, once for x, once for y
       local move_result = selector_move_to(change[1], 0)
       if move_result then
         selector_move_to(0, change[2])
       end
     elseif change[1] then
-      -- move x
       selector_move_to(change[1], 0)
     elseif change[2] then
-      -- move y
       selector_move_to(0, change[2])
     end
   end
@@ -1453,7 +1452,7 @@ function make_unit(unit_type_index, p, team)
     unit,
     unit.cached_animator_fps,
     unit.sprite,
-    64,
+    unit.sprite_offset,
     team,
     {0, -1},
     true
@@ -1755,7 +1754,13 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
   animator.animation_frame = 0
   animator.flip_sprite = false
 
-  animator.draw = function(self)
+  animator.draw = function(self, p)
+    local x = self.parent.p[1]
+    local y = self.parent.p[2]
+    if p then
+      x = p[1]
+      y = p[2]
+    end
     -- update and animate the sprite
     self.time_since_last_frame += delta_time
     if self.animation_flag and self.time_since_last_frame > self.fps then
@@ -1779,10 +1784,10 @@ function make_animator(parent, fps, sprite, sprite_offset, palette, draw_offset,
       -- draw shadow
       sprite_color = 0
       if self.parent.carrying then sprite_color = 15 end
-      outline_sprite(animation_frame, sprite_color, self.parent.p[1] + self.draw_offset[1], self.parent.p[2] + self.draw_offset[2], self.flip_sprite, self.palette)
+      outline_sprite(animation_frame, sprite_color, x + self.draw_offset[1], y + self.draw_offset[2], self.flip_sprite, self.palette)
     else
       -- draw sprite normally
-      spr(animation_frame, parent.p[1] + self.draw_offset[1], parent.p[2] + self.draw_offset[2], 1, 1, self.flip_sprite)
+      spr(animation_frame, x + self.draw_offset[1], y + self.draw_offset[2], 1, 1, self.flip_sprite)
     end
 
     pal()
@@ -1835,6 +1840,7 @@ function load_assets()
       u.index = peek_increment()
       u.type = load_string(10)
       u.sprite = peek_increment()
+      u.sprite_offset = peek_increment()
       u.mobility_type = peek_increment()
       u.travel = peek_increment()
       u.cost = peek_increment()
