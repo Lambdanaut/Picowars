@@ -12,7 +12,7 @@ last_checked_time, delta_time, unit_id_i, attack_timer, end_turn_timer, memory_i
 
 function _init()
   -- add menu item to return to main menu
-  menuitem(1, "abandon mission", function() end_game(3) end)
+  menuitem(1, "abandon mission", function() end_game(3 - players_turn) end)
 
   load_assets()
   current_map:load()
@@ -102,7 +102,6 @@ function end_game(reason)
   -- reasons:
   -- * 1: victory player 1
   -- * 2: victory player 2
-  -- * 3: abandon mission
 
   -- write match result
   memory_i = 0x5ddd

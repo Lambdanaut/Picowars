@@ -131,7 +131,6 @@ function _init()
   cartdata("picowars") 
 
   -- load save
-  write_save()
   read_save()
 
   -- make commanders for vs mode
@@ -153,8 +152,6 @@ function _init()
     end
     menu_index = 4  -- victory/defeat screen
   end
-
-  campaign_level_index = 9
 
 end
 
@@ -312,6 +309,9 @@ function update_verses_menu()
     -- write all commander and unit data to memory
     commander_teams = write_assets(current_map, {co1, co2}, players_human)
 
+    printh(commander_teams[1])
+    printh(commander_teams[2])
+
     write_match_meta(0, commander_teams[1], commander_teams[2], co1.index, co2.index)
   elseif btnp5 then
     -- back to main menu
@@ -343,6 +343,12 @@ function update_victory_defeat_menu()
     if match_meta_is_campaign_mission then
       if match_result_reason == 1 then
         -- campaign level victory. increment campaign counter, save game, and continue to next mission.
+
+        -- unlock new commander
+        if current_level.co_unlocks then
+          commanders[current_level.co_unlocks.index].available = true
+        end
+
         campaign_level_index += 1
 
         if campaign_level_index <= #campaign_levels then
@@ -450,7 +456,10 @@ end
 function draw_victory_defeat_menu()
   cls(7)
 
+  local continue_text = "press ❎ or 🅾️ to continue"
+
   if match_meta_is_campaign_mission then
+    continue_text = "press ❎ or 🅾️ to save\n\n     and continue."
     -- campaign level. 
     if match_result_reason == 1 then
       local speed = calculate_speed(match_result_turn_count, current_level.perfect_turns)
@@ -476,7 +485,7 @@ function draw_victory_defeat_menu()
   end
 
   if last_checked_time % 2 > 1 then
-    print_double("press ❎ or 🅾️ to continue", 13, 55, 10, 11) 
+    print_double(continue_text, 14, 55, 10, 11) 
   end
 
   draw_victory_dialogue()
@@ -1428,8 +1437,9 @@ function instantiate_commanders(cos)
 end
 
 function make_vs_commanders()
+  local cos_to_add = instantiate_commanders(make_commanders())
   local vs_cos = {}
-  for co in all(commanders) do
+  for co in all(cos_to_add) do
     if co.available then
       add(vs_cos, co)
     end
@@ -1481,7 +1491,7 @@ function level_2()
   l.co_unlocks = co_alecia
 
   l.dialogue = {
-    {co_hachi, "what the hell was that about...", true},
+    {co_hachi, "what could that have been about...", true},
     {co_sami, "sir!"},
     {co_sami, "first commanding officer sami domino reporting in!"},
     {co_hachi, "sami eh?", true},
@@ -1944,7 +1954,6 @@ function read_save()
   for co in all(commanders) do
     local available = peek_increment()
     if available == 1 then co.available = true end
-    co.available = true
   end
 
   -- read available war maps to disk
