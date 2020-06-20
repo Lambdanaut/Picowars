@@ -980,6 +980,7 @@ function selector_draw()
   rectfill(x_corner + 115, y_corner, x_corner + 128, y_corner + 6, 8) -- players' gold background
   print(gold .. "g", x_corner + 116, y_corner + 1, 7 + (flr((last_checked_time*2 % 2)) * 3)) -- player's gold
   if u then
+    set_palette(u.team)
     rectfill(x_corner, y_corner + 119, x_corner + 52, y_corner + 128, 8) -- unit info background
     u.animator:draw({x_corner+2, y_corner + 119})
     print(u.type, x_corner+13, y_corner+121, 0)
