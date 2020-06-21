@@ -455,6 +455,8 @@ function draw_campaign()
 
 
   if campaign_dialogue_complete then
+    print_double("intel", 11, 3, 0, 6)
+
     set_palette(current_level.co_p1.team_index)
     rectfill(10, 10, 118, 63, 9)
     line(10, 63, 118, 63, 2) 
