@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
 
-version = "1.0"
+version = "1.1"
 
 dead_str = 'dead'
 
