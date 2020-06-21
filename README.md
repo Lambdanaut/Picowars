@@ -7,8 +7,8 @@ An Advance Wars homage created in [PICO-8](https://www.lexaloffle.com/pico-8.php
 Todo in order
 -------------
 
-* Play through campaign, balancing scoring system
 * Make vs maps
+* Fix camera scrolling so it's less nauseating
 
 
 Done
@@ -58,6 +58,7 @@ Done
 * Save/load functionality
 * Unlockable commanders
 * Dialogue
+* Play through campaign, balancing scoring system
 
 
 Bugs-to-fix
