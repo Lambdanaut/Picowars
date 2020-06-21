@@ -42,10 +42,6 @@ function _update()
   for unit in all(units) do
     unit:update()
   end
-
-  if btnp4 and btnp5 then
-    end_game(players_turn)
-  end
 end
 
 function _draw()
