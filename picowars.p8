@@ -719,7 +719,7 @@ function camp_map_1()
   local m = {}
 
   m.name = "capital offense"
-  m.r = {0, 0, 24, 20}
+  m.r = {0, 0, 22, 20}
   m.bg_color = 12
 
   m.load_external = 1
