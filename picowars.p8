@@ -78,7 +78,7 @@ starting_memory = 0x4300
 menu_index = 1
 
 main_menu_selected = 0
-main_menu_options = {"campaign mode", "verses mode"}
+main_menu_options = {"campaign mode", "versus mode"}
 
 vs_mode_option_selected = 0
 map_index_selected = 0
@@ -151,7 +151,7 @@ function _update()
   elseif menu_index == 1 then
     update_main_menu()
   elseif menu_index == 2 then
-    update_verses_menu()
+    update_versus_menu()
   elseif menu_index == 3 then
     update_campaign()
   elseif menu_index == 4 then
@@ -188,7 +188,7 @@ function _draw()
       draw_main_menu()
 
     elseif menu_index == 2 then
-      draw_verses_menu()
+      draw_versus_menu()
     end
   elseif menu_index == 3 then
     draw_campaign()
@@ -227,7 +227,7 @@ function update_main_menu()
   end
 end
 
-function update_verses_menu()
+function update_versus_menu()
   if vs_mode_option_selected == 0 then 
    
     if btnp_left then 
@@ -370,7 +370,7 @@ function draw_main_menu()
   pal()
 end
 
-function draw_verses_menu()
+function draw_versus_menu()
  
   for y = 0, 1 do
     for x = 0, 1 do
