@@ -1,18 +1,11 @@
 pico-8 cartridge // http://www.pico-8.com
 version 27
 __lua__
--- pico wars
--- by lambdanaut
--- https://lambdanaut.itch.io/
--- https://twitter.com/lambdanaut
--- thanks to nintendo for making advance wars
--- special thanks to caaz for making the original picowars that gave me so much inspiration along the way
 
 version = "1.0"
 
 dead_str = 'dead'
 
--- mobility ids
 mobility_infantry = 0
 mobility_mech = 1
 mobility_tires = 2
@@ -30,7 +23,6 @@ unit_index_rocket = 7
 unit_index_war_tank = 8
 
 
--- sfx
 sfx_option_change = 0
 sfx_splash_screen_start = 1
 sfx_dialogue_char = 2
@@ -48,7 +40,6 @@ sfx_war_tank_combat = 26
 sfx_artillery_combat = 27
 sfx_rocket_combat = 28
 
--- portraits
 p_sami = 238
 p_alecia = 206
 p_bill = 236
@@ -63,20 +54,16 @@ p_storm = 228
 p_jethro = 196
 
 
--- music
 team_index_to_music = {
   31, 0, 44, 15
 }
 
--- team icons
 team_index_to_team_icon = {
   192, 208, 193, 209
 }
 
 team_index_to_team_name = {"orange star★", "blue moon●", "green earth🅾️", "pink quasar░"}
 
--- ai unit ratios
--- must add up to 100
 ai_unit_ratio_infantry = 25
 ai_unit_ratio_mech = 12
 ai_unit_ratio_recon = 15
@@ -86,20 +73,13 @@ ai_unit_ratio_tank = 12
 ai_unit_ratio_rocket = 11
 ai_unit_ratio_war_tank = 12
 
--- byte constants
 starting_memory = 0x4300
 
--- menu index
--- 1=splash screen
--- 2=vs selection
--- 3=campaign dialogue
--- 4=victory/defeat screen
 menu_index = 1
 
 main_menu_selected = 0
 main_menu_options = {"campaign mode", "verses mode"}
 
--- verses menu
 vs_mode_option_selected = 0
 map_index_selected = 0
 ai_index_selected = 0
@@ -108,16 +88,13 @@ p2_co_index_selected = 0
 map_index_options = {"arbor island", "lil highland", "big island", "crossover"}
 ai_index_options = {"vs ai", "vs human", "ai vs ai"}
 
--- fadeout variables
 fading = 0
 
--- globals
 last_checked_time = 0.0
-delta_time = 0.0  -- time since last frame
+delta_time = 0.0 
 memory_i = starting_memory
 campaign_level_index = 1
 
--- dialogue defaults
 dialogue_timer = 0
 ongoing_dialogue = {}
 current_dialogue_index = 1
@@ -126,31 +103,31 @@ allow_dialogue_skipping = false
 
 function _init()
 
-  -- setup cartdata
+ 
   cartdata("picowars") 
 
-  -- load save
+ 
   read_save()
 
-  -- make commanders for vs mode
-  -- done after reading the save because we have to see what's available
+ 
+ 
   commanders_p1 = make_vs_commanders()
   commanders_p2 = make_vs_commanders()
 
-  -- read match result
+ 
   read_match_result()
   clear_match_result()
 
-  -- read match metadata
+ 
   read_match_meta()
-  clear_match_meta()  -- reset match meta memory bits
+  clear_match_meta() 
 
   if match_meta_coming_from_match then
     if match_meta_is_campaign_mission then
       if match_result_reason == 1 then sfx(sfx_campaign_victory) end
       init_campaign()
     end
-    menu_index = 4  -- victory/defeat screen
+    menu_index = 4 
   end
 
 end
@@ -185,13 +162,13 @@ end
 
 function _draw()
   if menu_index == 1 or menu_index == 2 then
-      -- splash screen
+     
       cls()
 
-      rectfill(0, 0, 16, 128, 9) --left and right bars
+      rectfill(0, 0, 16, 128, 9)
       rectfill(112, 0, 128, 128, 9)
 
-      spr(32, 33, 19, 8, 2) --logo
+      spr(32, 33, 19, 8, 2)
       print("version " .. version, 44, 30, 9)
 
       local sprite_blue_moon = 208
@@ -221,7 +198,7 @@ function _draw()
 end
 
 function update_main_menu()
-  -- main menu / splash screen
+ 
 
   if not splash_music_started then
     music(music_splash_screen, 0, music_bitmask)
@@ -240,11 +217,11 @@ function update_main_menu()
   if btnp4 then
     sfx(sfx_splash_screen_start)
     if main_menu_selected == 0 then
-      -- start campaign
+     
       init_campaign()
       menu_index = 3
     elseif main_menu_selected == 1 then
-      -- open vs mode menu
+     
       menu_index = 2
     end
   end
@@ -252,7 +229,7 @@ end
 
 function update_verses_menu()
   if vs_mode_option_selected == 0 then 
-    -- map selection
+   
     if btnp_left then 
       map_index_selected -= 1 
       sfx(0)
@@ -261,7 +238,7 @@ function update_verses_menu()
       sfx(0)
     end
   elseif vs_mode_option_selected == 1 then 
-    -- vs human/ai selection
+   
     if btnp_left then 
       ai_index_selected -= 1 
       sfx(0)
@@ -270,7 +247,7 @@ function update_verses_menu()
       sfx(0)
     end
   elseif vs_mode_option_selected == 2 then 
-    -- p1 commander selection
+   
     if btnp_left then 
       p1_co_index_selected -= 1 
       sfx(0)
@@ -280,7 +257,7 @@ function update_verses_menu()
     end
 
   elseif vs_mode_option_selected == 3 then 
-    -- p2 commander selection
+   
     if btnp_left then 
       p2_co_index_selected -= 1 
       sfx(0)
@@ -299,7 +276,7 @@ function update_verses_menu()
   end
 
   if btnp4 then
-    -- start vs match
+   
     sfx(1)
 
     fadeout()
@@ -311,12 +288,12 @@ function update_verses_menu()
     local co1 = commanders_p1[p1_co_index_selected+1]
     local co2 = commanders_p2[p2_co_index_selected+1]
 
-    -- write all commander and unit data to memory
+   
     commander_teams = write_assets(current_map, {co1, co2}, players_human)
 
     write_match_meta(0, commander_teams[1], commander_teams[2], co1.index, co2.index)
   elseif btnp5 then
-    -- back to main menu
+   
     sfx(1)
     menu_index = 1
   end
@@ -345,9 +322,9 @@ function update_victory_defeat_menu()
 
     if match_meta_is_campaign_mission then
       if match_result_reason == 1 then
-        -- campaign level victory. increment campaign counter, save game, and continue to next mission.
+       
 
-        -- unlock commanders
+       
         for lvl in all(campaign_levels) do
           if lvl.index <= campaign_level_index and lvl.co_unlocks then
             commanders[lvl.co_unlocks.index].available = true
@@ -357,13 +334,13 @@ function update_victory_defeat_menu()
         campaign_level_index += 1
 
         if campaign_level_index <= #campaign_levels then
-          -- start next campaign mission
+         
           init_campaign()
           write_save()
           menu_index = 3
         else
-          -- final level
-          -- do endgame credits
+         
+         
           campaign_level_index -= 1
           write_save()
           load("credits.p8")
@@ -373,7 +350,7 @@ function update_victory_defeat_menu()
         menu_index = 1
       end
     else
-      -- not campaign mission. return to main menu
+     
       sfx(1)
       menu_index = 1
     end
@@ -394,21 +371,21 @@ function draw_main_menu()
 end
 
 function draw_verses_menu()
-  -- draw map and ai/human selection
+ 
   for y = 0, 1 do
     for x = 0, 1 do
       spr(last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
     end
   end
   if vs_mode_option_selected < 2 then
-    -- draw selected
+   
     rectfill(38, 58 + (vs_mode_option_selected) * 19, 86, 64 + (vs_mode_option_selected) * 19, 4)
   end
 
   print(map_index_options[map_index_selected+1], 39, 59, 7)
   print(ai_index_options[ai_index_selected+1], 53 + ai_index_selected*-6, 78, 7)
 
-  -- draw commander selection
+ 
   local co1 = commanders_p1[p1_co_index_selected+1]
   local co2 = commanders_p2[p2_co_index_selected+1]
   spr(co1.sprite, 35, 105, 2, 2)
@@ -427,7 +404,7 @@ function draw_verses_menu()
 end
 
 function draw_campaign()
-  -- calculate map movement offset
+ 
   local x_offset = 0
   local y_offset = 0
   local map_move_timer_duration = 3
@@ -442,23 +419,23 @@ function draw_campaign()
     end
   end
 
-  -- draw map
+ 
   cls(12)
   map(0, 31, current_level.map_pos[1] + x_offset, current_level.map_pos[2] + y_offset, 16, 18)
 
-  -- draw victory flags over defeated islands
+ 
   local sprite_offset = (last_checked_time*6) % 5
   for level in all(campaign_levels) do
     if level.index < campaign_level_index then
       local spr_x = current_level.map_pos[1] - level.map_pos[1] + 64 + x_offset
       local spr_y = current_level.map_pos[2] - level.map_pos[2] + 58 + y_offset
 
-      -- flag
+     
       outline_sprite(75 + sprite_offset, 0, spr_x, spr_y)
     end
   end
 
-  -- draw current island selector
+ 
   if (last_checked_time * 2) % 2 > 1 then
     spr(91, 61, 60)
   end
@@ -469,12 +446,12 @@ function draw_campaign()
     active_dialogue_coroutine = cocreate(dialogue_coroutine)
 
   elseif costatus(active_dialogue_coroutine) == dead_str then
-    -- dialogue over. run campaign mission
+   
 
-    -- write the map, commander and unit data to memory
+   
     write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
 
-    -- write match meta to memory
+   
     write_match_meta(
       current_level.index,
       current_level.co_p1.team_index,
@@ -497,7 +474,7 @@ function draw_victory_defeat_menu()
 
   if match_meta_is_campaign_mission then
     continue_text = "press ❎ or 🅾️ to save\n\n     and continue."
-    -- campaign level. 
+   
     if match_result_reason == 1 then
       local speed = calculate_speed(match_result_turn_count, current_level.perfect_turns)
       local technique = calculate_technique(match_result_units_built[1], match_result_units_lost[1])
@@ -513,7 +490,7 @@ function draw_victory_defeat_menu()
       print_double("defeat", 53, 44, 9, 8)
     end
   else
-    -- not campaign level. 
+   
     local victor = match_meta_p1_team_index
     if match_result_reason == 2 then
       victor = match_meta_p2_team_index
@@ -547,7 +524,6 @@ function draw_victory_dialogue()
   end
 end
 
--- coroutines
 function dialogue_coroutine()
   local last_speaker_i
   current_dialogue_index = 0
@@ -558,7 +534,7 @@ function dialogue_coroutine()
     local next_dialogue = ongoing_dialogue[current_dialogue_index]
 
     if last_speaker_i and last_speaker_i ~= next_dialogue[1].index then
-      -- play commander switchout animation
+     
       for i = 1, 10 do
         draw_dialogue("", 0, -(i / 2)^2)
         yield()
@@ -639,13 +615,13 @@ end
 function draw_dialogue(string, length, co_x_offset)
   if not co_x_offset then co_x_offset = 0 end
   set_palette(current_dialogue[1].team_index)
-  rectfill(0, 96, 128, 128, 9)  -- bground
-  line(0, 96, 128, 96, 2)  -- bground border
+  rectfill(0, 96, 128, 128, 9) 
+  line(0, 96, 128, 96, 2) 
   pal()
-  rectfill(1 + co_x_offset, 98, 18 + co_x_offset, 115, 0)  -- portrait border
+  rectfill(1 + co_x_offset, 98, 18 + co_x_offset, 115, 0) 
   local sprite_offset = 0
   if current_dialogue[3] then sprite_offset = -64 end
-  spr(current_dialogue[1].sprite + sprite_offset, 2 + co_x_offset, 99, 2, 2)  -- portrait
+  spr(current_dialogue[1].sprite + sprite_offset, 2 + co_x_offset, 99, 2, 2) 
 
   local strings = split_str(string, length)
   local str_i = 102
@@ -658,7 +634,7 @@ function draw_dialogue(string, length, co_x_offset)
 end
 
 function split_str(str, length)
-  -- splits a string into parts for dialogue
+ 
 
   if not length then length = 32767 end
   local max_on_line = 18
@@ -689,7 +665,6 @@ function split_str(str, length)
 
 end
 
--- maps
 function map_arbor_island()
   local m = {}
 
@@ -697,8 +672,8 @@ function map_arbor_island()
   m.r = {0, 0, 14, 21}
   m.bg_color = 12
 
-  -- should we load the map from a source other than the engine?
-  -- 0=false, 1=load from this map, 2=load from secondary map source
+ 
+ 
   m.load_external = 0
 
   return m
@@ -845,12 +820,9 @@ function camp_map_9()
 end
 
 
--- mapping of map options to maps in vs mode selection
--- must appear after all make_map statements
 vs_map_index_mapping = {map_arbor_island(), map2(), map3(), map4()}
 
 
--- unitdata
 function make_units()
   local units = {
     make_infantry(),
@@ -865,7 +837,6 @@ function make_units()
   return units
 end
 
--- infantry
 function make_infantry()
   local unit = {}
 
@@ -954,10 +925,10 @@ function make_recon()
   unit.combat_sfx = sfx_recon_combat
   unit.is_carrier = false
 
-  -- just a bit stronger vs lighter units than advance wars 2 recon because fog of war is removed.
-  -- made into a true anti-infantry unit
-  -- if we add fog of war, consider nerfing the recon to advance-wars level
-  -- https://advancewars.fandom.com/wiki/recon_(advance_wars_2)
+ 
+ 
+ 
+ 
   dc = {}
   dc[unit_index_infantry] = 7.6
   dc[unit_index_mech] = 6.8
@@ -989,7 +960,7 @@ function make_apc()
   unit.struct_heal_bonus = 0
   unit.ai_unit_ratio = ai_unit_ratio_apc
   unit.moveout_sfx = sfx_tank_moveout
-  unit.combat_sfx = 0  -- no combat
+  unit.combat_sfx = 0 
   unit.is_carrier = true
 
   dc = {}
@@ -1142,14 +1113,13 @@ function make_war_tank()
   return unit
 end
 
--- commanders
 function make_sami()
   local co = {}
 
   co.index = 1
   co.name = "sami"
   co.sprite = p_sami
-  co.team_index = 1  -- orange star
+  co.team_index = 1 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = true
   co.music = team_index_to_music[co.team_index]
@@ -1157,23 +1127,23 @@ function make_sami()
 
   co.units = make_units()
 
-  -- sami's infantry, mechs, and apc travels further
+ 
   co.units[unit_index_infantry].travel += 1
   co.units[unit_index_mech].travel += 1
   co.units[unit_index_apc].travel += 1
 
-  -- sami's infantry and mechs have a +5 to their capture rate
+ 
   co.units[unit_index_infantry].capture_bonus += 5
   co.units[unit_index_mech].capture_bonus += 5
 
-  -- sami's infantry and mechs have 30% more attack
+ 
   for i in all({unit_index_infantry, unit_index_mech}) do
     for j=1,#co.units[i].damage_chart do
       co.units[i].damage_chart[j] *= 1.3
     end
   end
 
-  -- sami's non-infantry units have 10% less attack
+ 
   for i=3,#co.units do
     for j=1,#co.units[i].damage_chart do
       co.units[i].damage_chart[j] *= 0.9
@@ -1198,7 +1168,7 @@ function make_hachi()
 
   co.units = make_units()
 
-  -- hachi's non-infantry and non-mech units cost 15% less
+ 
   for i=3, #co.units do
     co.units[i].cost = flr(co.units[i].cost * 0.85)
   end
@@ -1221,7 +1191,7 @@ function make_slydy_hachi()
 
   co.units = make_units()
 
-  -- slydy-hachi's non-infantry and non-mech units cost 15% less
+ 
   for i=3, #co.units do
     co.units[i].cost = flr(co.units[i].cost * 0.85)
   end
@@ -1236,7 +1206,7 @@ function make_bill()
   co.index = 4
   co.name = "bill"
   co.sprite = p_bill
-  co.team_index = 2  -- blue moon
+  co.team_index = 2 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = true
   co.music = team_index_to_music[co.team_index]
@@ -1244,7 +1214,7 @@ function make_bill()
 
   co.units = make_units()
 
-  -- bill's units have 10% more luck
+ 
   for i=1,#co.units do
     co.units[i].luck_max = 2
   end
@@ -1267,11 +1237,11 @@ function make_alecia()
 
   co.units = make_units()
 
-  -- alecia's units are healed by 3 by structures
+ 
   for unit in all(co.units) do
     unit.struct_heal_bonus = 1
 
-    -- all of alecia's units have 10% less firepower
+   
     for i=1, #unit.damage_chart do
       unit.damage_chart[i] *= 0.9
     end
@@ -1296,10 +1266,10 @@ function make_conrad()
   co.units = make_units()
 
   for unit in all(co.units) do
-    -- conrads's units are only healed by 1 by structures
+   
     unit.struct_heal_bonus = -1
 
-    -- all of conrads units have 15% more firepower
+   
     for i=1, #unit.damage_chart do
       unit.damage_chart[i] *= 1.15
     end
@@ -1315,7 +1285,7 @@ function make_guster()
   co.index = 7
   co.name = "guster"
   co.sprite = p_guster
-  co.team_index = 3  -- green earth
+  co.team_index = 3 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
@@ -1323,25 +1293,25 @@ function make_guster()
 
   co.units = make_units()
 
-  -- guster's ranged units have +1 range
+ 
   co.units[5].range_max += 1
   co.units[7].range_max += 1
 
-  -- guster's ranged units have 30% more attack
+ 
   for i in all({unit_index_artillery, unit_index_rocket}) do
     for j=1,#co.units[i].damage_chart do
       co.units[i].damage_chart[j] *= 1.3
     end
   end
 
-  -- guster's non-ranged, non-infantry units have 10% less attack
+ 
   for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
     for j=1,#co.units[i].damage_chart do
       co.units[i].damage_chart[j] *= 0.9
     end
   end
 
-  -- guster's ai prioritizes ranged units
+ 
   co.units[unit_index_infantry].ai_unit_ratio = 7
   co.units[unit_index_mech].ai_unit_ratio = 5
   co.units[unit_index_recon].ai_unit_ratio = 5
@@ -1361,7 +1331,7 @@ function make_glitch()
   co.index = 8
   co.name = "glitch"
   co.sprite = p_glitch
-  co.team_index = 4  -- pink quasar
+  co.team_index = 4 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
@@ -1369,7 +1339,7 @@ function make_glitch()
 
   co.units = make_units()
 
-  -- glitch's unit graphics are glitched
+ 
   for i=1,#co.units do
     co.units[i].sprite_offset = 128
   end
@@ -1384,7 +1354,7 @@ function make_slydy()
   co.index = 9
   co.name = "slydy"
   co.sprite = p_slydy
-  co.team_index = 4  -- pink quasar
+  co.team_index = 4 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
@@ -1393,12 +1363,12 @@ function make_slydy()
   co.units = make_units()
 
   for unit in all(co.units) do
-    -- slydy's units cost 15% more
+   
     if unit.index > 2 then
       unit.cost = ceil(unit.cost * 1.15)
     end
 
-    -- all of slydy's units have 30% more firepower
+   
     for i=1, #unit.damage_chart do
       unit.damage_chart[i] *= 1.3
     end
@@ -1414,7 +1384,7 @@ function make_storm()
   co.index = 10
   co.name = "storm"
   co.sprite = p_storm
-  co.team_index = 4  -- pink quasar
+  co.team_index = 4 
   co.team_icon = team_index_to_team_icon[co.team_index]
   co.available = false
   co.music = team_index_to_music[co.team_index]
@@ -1422,7 +1392,7 @@ function make_storm()
 
   co.units = make_units()
 
-  -- storm's units have +1 travel
+ 
   for i=1,#co.units do
     co.units[i].travel += 1
   end
@@ -1449,7 +1419,7 @@ function make_jethro()
 
   co.units = make_units()
 
-  -- jethro's infantry and mechs have a +10 to their capture rate
+ 
   co.units[unit_index_infantry].capture_bonus += 10
   co.units[unit_index_mech].capture_bonus += 10
 
@@ -1494,7 +1464,6 @@ end
 
 commanders = instantiate_commanders(make_commanders())
 
--- campaign levels
 function level_1()
   local l = {}
 
@@ -1850,13 +1819,11 @@ function level_9()
   return l
 end
 
--- index of all campaign levels 
 campaign_levels = {level_1(), level_2(), level_3(), level_4(), level_5(), level_6(), level_7(), level_8(), level_9()}
 
--- memory read/write functions
 
 function write_string(string, length)
-  -- writes a string to memory
+ 
   for i = 1, length do
     local c = sub(string, i, i)
     local charcode_val = ord(c)
@@ -1865,32 +1832,32 @@ function write_string(string, length)
 end
 
 function peek_increment()
-  -- peeks at memory_i and increments the global memory_i counter while doing it
+ 
   local v = peek(memory_i)
   memory_i += 1
   return v
 end
 
 function poke_increment(poke_value)
-  -- pokes at memory_i and increments the global memory_i counter while doing it
+ 
   poke(memory_i, poke_value)
   memory_i += 1
 end
 
 function poke2_increment(poke_value)
-  -- pokes at memory_i and increments the global memory_i counter while doing it
+ 
   poke2(memory_i, poke_value)
   memory_i += 2
 end
 
 function poke4_increment(poke_value)
-  -- pokes at memory_i and increments the global memory_i counter while doing it
+ 
   poke4(memory_i, poke_value)
   memory_i += 4
 end
 
 function write_unit(u)
-  -- writes a unit to memory
+ 
 
   poke_increment(u.index)
   write_string(u.type, 10)
@@ -1909,7 +1876,7 @@ function write_unit(u)
   poke_increment(u.combat_sfx)
   if u.is_carrier then poke_increment(1) else poke_increment(0) end
 
-  -- damage chart
+ 
   for attacked_unit_index, damage_val in pairs(u.damage_chart) do
     poke4_increment(damage_val)
   end
@@ -1933,31 +1900,31 @@ function write_co(co, human_player, team_index)
 end
 
 function write_map(m)
-  -- write out the map's bounds to memory
+ 
   for i=1,4 do
     poke_increment(m.r[i])
   end
   poke_increment(m.bg_color)
 
   if m.load_external == 0 then
-    -- set byte to indicate map shouldn't be loaded from external source
+   
     poke_increment(0)
   elseif m.load_external == 1 then
-    -- set byte to indicate map should be loaded from external source
+   
     poke_increment(1)
-    -- load the map data into code
+   
   end
 
 end
 
 function write_assets(game_map, game_commanders, team_humans, team_indexes)
-  -- write all assets to be loaded by engine.p8
-  -- game_map is a map object created by a make_map function
-  -- game_commanders is a 2 indexed table of both of the commanders
-  -- team_humans is a 2 indexed table indicating whether the player is a human or ai
-  -- team_indexes is an optional 2 indexed table indicating what team each player should be on (orange star, blue moon.. etc)
+ 
+ 
+ 
+ 
+ 
 
-  -- returns the resulting commanders team indexes in a tuple {team1index, team2index}
+ 
 
   memory_i = starting_memory
   if not team_indexes then team_indexes = {} end
@@ -1975,10 +1942,10 @@ end
 function write_save()
   memory_i = 0x5e00
 
-  -- write campaign score and progress to disk
+ 
   poke_increment(campaign_level_index)
 
-  -- write available commanders to disk
+ 
   for co in all(commanders) do
     local available = 0
     if co.available then available = 1 end
@@ -1989,10 +1956,10 @@ end
 function read_save()
   memory_i = 0x5e00
 
-  -- read campaign score and progress to disk
+ 
   campaign_level_index = peek_increment()
 
-  -- read available commanders to disk
+ 
   for co in all(commanders) do
     local available = peek_increment()
     if available == 1 then co.available = true end
@@ -2000,7 +1967,7 @@ function read_save()
 end
 
 function delete_save()
-  -- utility for deleting a save
+ 
   for i=0, 63 do
     dset(i, 0)
   end
@@ -2023,10 +1990,10 @@ function read_match_meta()
 end
 
 function write_match_meta(level_index, p1_team_index, p2_team_index, p1_commander_index, p2_commander_index)
-  -- writes metadata about a match to be read by loader after the match
+ 
   memory_i = 0x5dc0
 
-  poke_increment(1)  -- bool to indicate we're entering a match
+  poke_increment(1) 
   poke_increment(level_index)
   poke_increment(p1_team_index)
   poke_increment(p2_team_index)
@@ -2035,7 +2002,7 @@ function write_match_meta(level_index, p1_team_index, p2_team_index, p1_commande
 end
 
 function clear_match_meta()
-  -- clears match metadata. run on loader startup
+ 
   memory_i = 0x5dc0
 
   while memory_i < 0x5ddd do
@@ -2045,14 +2012,14 @@ function clear_match_meta()
 end
 
 function read_match_result()
-  -- reads a match's results from memory and sets global variables for each of them
+ 
 
-  memory_i = 0x5ddd -- beginning of match result memory
+  memory_i = 0x5ddd
 
-  -- reasons:
-  -- * 1: victory player 1
-  -- * 2: victory player 2
-  -- * 3: abandon mission
+ 
+ 
+ 
+ 
   match_result_reason = peek_increment()
   match_result_units_lost = {}
   match_result_units_built = {}
@@ -2064,7 +2031,7 @@ function read_match_result()
 end
 
 function clear_match_result()
-  -- clears match result. run on loader startup
+ 
   memory_i = 0x5ddd
 
   poke_increment(0)
@@ -2106,24 +2073,24 @@ function print_double(str, x, y, col, double_color)
 end
 
 function outline_sprite(n,col_outline,x,y,flip_x)
-  -- reset palette to black
+ 
   for c=1,15 do
     pal(c,col_outline)
   end
-  -- draw outline
+ 
   for xx=-1,1 do
     for yy=-1,1 do
       spr(n,x+xx,y+yy,1,1,flip_x,flip_y)
     end
   end
   pal()
-  -- draw final sprite
+ 
   spr(n,x,y,1,1,flip_x,flip_y) 
 end
 
 function fadeout()
-  -- by dw817 
-  -- https://www.lexaloffle.com/bbs/?tid=36243
+ 
+ 
   local fade,c,p={[0]=0,17,18,19,20,16,22,6,24,25,9,27,28,29,29,31,0,0,16,17,16,16,5,0,2,4,0,3,1,18,2,4}
   fading+=1
   if fading%5==1 then
@@ -2135,14 +2102,14 @@ function fadeout()
       pal(i,p,1)
     end
     if fading==7*5+1 then
-      -- start the map when fading is over
+     
       start_map()
     end
   end
 end
 
 function merge_tables(t1, t2)
-  -- merges the second table into the first
+ 
   i = #t1 + 1
   for _, v in pairs(t2) do 
     t1[i] = v 
@@ -2151,7 +2118,7 @@ function merge_tables(t1, t2)
 end
 
 function start_map()
-  -- start a map
+ 
   load("engine.p8")
 end
 

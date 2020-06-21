@@ -1,6 +1,8 @@
 PICOWARS DEV NOTES
 ==================
 
+regex to replace comments: \/\*[\s\S]*?\*\/|([^:]|^)\-\-.*$
+
 The below are notes for my use during development. 
 
 -- sfx
