@@ -104,7 +104,7 @@ function _draw()
    
     rectfill(0, 0, 128, 128, 0)
     spr(160, 31, 29, 8, 2)
-    print("version 0.4", 42, 40, 9)
+    print("version 0.5", 42, 40, 9)
     for y = 0, 1 do
       for x = 0, 1 do
         spr(168 + last_checked_time*2 % 2, 24 + x*70, 54 + y*20, 1, 2, x==1)
