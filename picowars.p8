@@ -445,25 +445,50 @@ function draw_campaign()
     ongoing_dialogue = current_level.dialogue
     active_dialogue_coroutine = cocreate(dialogue_coroutine)
 
-  elseif costatus(active_dialogue_coroutine) == dead_str then
-   
-
-   
-    write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
-
-   
-    write_match_meta(
-      current_level.index,
-      current_level.co_p1.team_index,
-      current_level.co_p2.team_index,
-      current_level.co_p1.index,
-      current_level.co_p2.index)
-
-    fadeout()
+  elseif costatus(active_dialogue_coroutine) == dead_str and not campaign_dialogue_complete then
+    campaign_dialogue_complete = true
+    sfx(1)
 
   elseif active_dialogue_coroutine then
     coresume(active_dialogue_coroutine)
   end
+
+
+  if campaign_dialogue_complete then
+    set_palette(current_level.co_p1.team_index)
+    rectfill(10, 10, 118, 63, 9)
+    line(10, 63, 118, 63, 2) 
+    print_double(current_level.co_p1.name, 32, 13, 0, 8)
+    print_double(current_level.co_p1.desc, 32, 21, 0, 8)
+    pal()
+
+    rectfill(11, 11, 28, 28, 0)
+    spr(current_level.co_p1.sprite, 12, 12, 2, 2) 
+
+    set_palette(current_level.co_p2.team_index)
+    rectfill(10, 65, 118, 118, 9)
+    line(10, 118, 118, 118, 2) 
+    print_double(current_level.co_p2.name, 32, 68, 0, 8)
+    print_double(current_level.co_p2.desc, 32, 76, 0, 8)
+    pal()
+
+    rectfill(11, 66, 28, 83, 0)
+    spr(current_level.co_p2.sprite, 12, 67, 2, 2) 
+
+    if btnp4 then
+      write_assets(current_level.map, {current_level.co_p1, current_level.co_p2}, {true, false})
+     
+      write_match_meta(
+        current_level.index,
+        current_level.co_p1.team_index,
+        current_level.co_p2.team_index,
+        current_level.co_p1.index,
+        current_level.co_p2.index)
+
+      fadeout()
+    end
+  end
+
 
 end
 
@@ -618,7 +643,7 @@ function draw_dialogue(string, length, co_x_offset)
   rectfill(0, 96, 128, 128, 9) 
   line(0, 96, 128, 96, 2) 
   pal()
-  rectfill(1 + co_x_offset, 98, 18 + co_x_offset, 115, 0) 
+  rectfill(1 + co_x_offset, 98, 18 + co_x_offset, 115, 0)
   local sprite_offset = 0
   if current_dialogue[3] then sprite_offset = -64 end
   spr(current_dialogue[1].sprite + sprite_offset, 2 + co_x_offset, 99, 2, 2) 
@@ -1124,6 +1149,7 @@ function make_sami()
   co.available = true
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "score one for the grunts!"}}
+  co.desc = "sami's infantry and\nmechs capture\nfaster, move\nfurther and have more\nfirepower. all other\nunits do less damage."
 
   co.units = make_units()
 
@@ -1165,6 +1191,7 @@ function make_hachi()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "i may be old, but i can still rumble!"}}
+  co.desc = "hachi's units cost\n15% less to build\nfrom bases. his\ninfantry and mechs,\nhowever, cost the\nsame."
 
   co.units = make_units()
 
@@ -1188,6 +1215,7 @@ function make_slydy_hachi()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "I ▒▒M░ay be old, but …░I can s ti…░ll r ▒▒mble!"}}
+  co.desc = "hachi's units cost\n15% less to build\nfrom bases. his\ninfantry and mechs,\nhowever, cost the\nsame."
 
   co.units = make_units()
 
@@ -1211,6 +1239,7 @@ function make_bill()
   co.available = true
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "lucks on our side!"}}
+  co.desc = "bill's units have\na greater chance\nof doing extra damage\nwhen they attack."
 
   co.units = make_units()
 
@@ -1234,6 +1263,7 @@ function make_alecia()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "you thought i'd give up that easy?"}}
+  co.desc = "alecia's unit's do\nless damage, but heal\nby 1 extra per\nturn when placed on\nproperties, a total\nof 3 health per turn."
 
   co.units = make_units()
 
@@ -1241,7 +1271,6 @@ function make_alecia()
   for unit in all(co.units) do
     unit.struct_heal_bonus = 1
 
-   
     for i=1, #unit.damage_chart do
       unit.damage_chart[i] *= 0.9
     end
@@ -1262,6 +1291,7 @@ function make_conrad()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "justice is the intention."}}
+  co.desc = "conrad's unit's do\nmore damage, but heal\nby 1 less per\nturn when placed on\nproperties, a total\nof 1 health per turn."
 
   co.units = make_units()
 
@@ -1290,6 +1320,7 @@ function make_guster()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "my calculations were nominal."}}
+  co.desc = "guster's ranged units\ndo more damage and\nhave more range, but\nall other units do\nless damage."
 
   co.units = make_units()
 
@@ -1305,7 +1336,7 @@ function make_guster()
   end
 
  
-  for i in all({unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
+  for i in all({unit_index_infantry, unit_index_mech, unit_index_recon, unit_index_tank, unit_index_war_tank}) do
     for j=1,#co.units[i].damage_chart do
       co.units[i].damage_chart[j] *= 0.9
     end
@@ -1336,6 +1367,7 @@ function make_glitch()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"}}
+  co.desc = "glitch's units aren't\nentirely sure what\nthey're supposed to\nlook like."
 
   co.units = make_units()
 
@@ -1359,15 +1391,14 @@ function make_slydy()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "the world is a cleaner place."}}
+  co.desc = "slydy's units cost\n15% more, but are all\nmuch stronger."
 
   co.units = make_units()
 
   for unit in all(co.units) do
-   
     if unit.index > 2 then
       unit.cost = ceil(unit.cost * 1.15)
     end
-
    
     for i=1, #unit.damage_chart do
       unit.damage_chart[i] *= 1.3
@@ -1389,6 +1420,7 @@ function make_storm()
   co.available = false
   co.music = team_index_to_music[co.team_index]
   co.dialogue = {{co, "you've taken everything from me.", true}}
+  co.desc = "all of storm's units\nmove 1 space further."
 
   co.units = make_units()
 
@@ -1416,9 +1448,9 @@ function make_jethro()
     {co, "to crush your enemies, see them driven before you,", true},
     {co, "and to hear the lamen- tation of their women.", true}
   }
+  co.desc = "jethro captures any\nproperty in a single\nturn."
 
   co.units = make_units()
-
  
   co.units[unit_index_infantry].capture_bonus += 10
   co.units[unit_index_mech].capture_bonus += 10
