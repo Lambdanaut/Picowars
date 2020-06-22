@@ -1506,7 +1506,7 @@ function level_1()
   l.map_pos = {33, 40}
   l.co_p1 = make_hachi()
   l.co_p2 = make_bill()
-  l.perfect_turns = 13
+  l.perfect_turns = 14
 
   l.dialogue = {
     {co_bill, "i'm here. i made it."},
