@@ -1681,7 +1681,7 @@ function level_6()
   l.map_pos = {-7, -57}
   l.co_p1 = make_alecia()
   l.co_p2 = make_slydy()
-  l.perfect_turns = 8
+  l.perfect_turns = 9
   l.co_unlocks = co_glitch
 
   local pink_hachi = make_slydy_hachi()

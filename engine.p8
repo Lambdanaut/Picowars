@@ -184,8 +184,9 @@ function ai_coroutine()
  
   enemy_attackables = {}
   if #ai_units_ranged > 0 then
-    for u2 in all(non_ai_units) do if u2.ranged then merge_tables(enemy_attackables, u2:ranged_attack_tiles())
-      elseif not u2.carrier then
+    for u2 in all(non_ai_units) do 
+      if u2.ranged then merge_tables(enemy_attackables, u2:ranged_attack_tiles())
+      elseif not u2.is_carrier then
         local u2_movable = u2:get_movable_tiles()[1]
         for t in all(u2_movable) do
           for u2_attackable in all(get_tile_adjacents(t)) do
