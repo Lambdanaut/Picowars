@@ -1063,7 +1063,7 @@ function make_tank()
   dc[unit_index_mech] = 3.0
   dc[unit_index_recon] = 8.5
   dc[unit_index_apc] = 7.5
-  dc[unit_index_artillery] = 7.0
+  dc[unit_index_artillery] = 8.5
   dc[unit_index_tank] = 5.5
   dc[unit_index_rocket] = 8.5
   dc[unit_index_war_tank] = 1.5
@@ -2161,7 +2161,7 @@ function calculate_speed(turns_completed, min_perfect_turns)
 end
 
 function calculate_technique(units_built, units_lost)
-  return min(100, 100 * (units_built - units_lost / 2) / units_built)
+  return min(100, 100 * ((units_built - units_lost / 2) / units_built) + 6)
 end
 
 function to_rank(score)
